@@ -26,6 +26,16 @@
 # ═════════════════════════════════════════════════════════════════
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Параметры Reader
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+reader:
+  schedule: "0 */4 * * *"          # Cron: каждые 4 часа
+  poll_interval_sec: 3600            # Если FETCH_MODE=polling
+  backfill_days: 14                  # Глубина первого опроса
+  # fetch_mode: "polling"            # или "once" (в docker-compose)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Каналы для мониторинга
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # username  — имя Telegram-канала (без @)
@@ -132,8 +142,13 @@ tag_filters:
 
 
 # ═════════════════════════════════════════════════════════════════
-# 2️⃣  ENGINE: Обработка постов через LLM (на будущее)
+# 2️⃣  ENGINE: Обработка постов через LLM (❌ НЕ ИСПОЛЬЗУЕТСЯ)
 # ═════════════════════════════════════════════════════════════════
+#
+# СТАТУС: ОТКЛЮЧЕНО
+# Эта секция зарезервирована для будущей интеграции с LLM (OpenAI, Claude, etc)
+# На данный момент не используется. Скопируйте и модифицируйте конфиг когда будете готовы.
+#
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Источники для ENGINE
@@ -182,27 +197,27 @@ tag_filters:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Маршрутизация в целевые каналы
+# Конфигурация PUBLISHER (АКТИВНО)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ШАГ 2: Где и когда публиковать
 
-# routing:
-#   jobs:
-#     target: "@my_digest_jobs"
-#     mode: "instant_or_digest"
-#     schedule:
-#       - "09:00 Europe/Moscow"
-#       - "14:00 Europe/Moscow"
-#       - "19:00 Europe/Moscow"
-#     format: "compact"
-#   # news:
-#   #   target: "@my_digest_news"
-#   #   mode: "digest"
-#   #   schedule:
-#   #     - "09:30 Europe/Moscow"
-#   #     - "18:30 Europe/Moscow"
-#   # learning:
-#   #   target: "@my_digest_learning"
-#   #   mode: "digest"
-#   #   schedule:
-#   #     - "21:00 Europe/Moscow"
+publisher:
+  # Общие параметры
+  schedule: "0 */1 * * *"           # Когда запускать: каждый час
+  queue_check_interval: 300          # Проверять очередь каждые 5 минут (сек)
+  queue_threshold: 20                # Если > 20 постов, публиковать немедленно
+  
+  # Публикация по тегам
+  sources:
+    jobs:
+      enabled: true
+      target_channel: "@my_digest_channel"   # Куда публиковать
+      batch_limit: 10                         # Макс постов за раз
+      # format: "compact"  # На будущее: compact/full/summary
+    # news:
+    #   enabled: false
+    #   target_channel: "@my_digest_news"
+    #   batch_limit: 15
+    # learning:
+    #   enabled: false
+    #   target_channel: "@my_digest_learning"
+    #   batch_limit: 10

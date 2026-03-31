@@ -51,13 +51,8 @@ services:
       POSTGRES_USER: tg_digest
       DB_HOST: postgres
       DB_PORT: 5432
-      CHANNELS_CONFIG: /app/config/channels.yml
+      CONFIG: /app/config/config.yml
       FETCH_MODE: polling
-      POLL_INTERVAL_SEC: 3600
-      BACKFILL_DAYS: 14
-      DEBUG: "false"
-      DB_POOL_MIN_SIZE: "5"
-      DB_POOL_MAX_SIZE: "20"
     secrets:
       - tg_api_id
       - tg_api_hash
@@ -68,6 +63,39 @@ services:
       - ./config:/app/config:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import asyncio, asyncpg; asyncio.run(asyncpg.connect('postgresql://tg_digest@postgres:5432/tg_digest', password='dummy'))" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Publisher — публикует посты в Telegram канал ───────────────
+  publisher:
+    build: ./app/publisher
+    container_name: tg_digest_publisher
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - tg-digest-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    user: "1000:1000"  # Run as non-privileged user
+    environment:
+      APP_ENV: prod
+      POSTGRES_DB: tg_digest
+      POSTGRES_USER: tg_digest
+      DB_HOST: postgres
+      DB_PORT: 5432
+      CONFIG: /app/config/config.yml
+    secrets:
+      - tg_api_id
+      - tg_api_hash
+      - tg_publisher_session
+      - pg_password
+    volumes:
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import asyncio, asyncpg; asyncio.run(asyncpg.connect('postgresql://tg_digest@postgres:5432/tg_digest', password='dummy'))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -96,27 +124,6 @@ services:
   #     - pg_password
   #   volumes:
   #     #- ./config/prompts:/app/config/prompts:ro
-  #     - ./config:/app/config:ro
-
-  # ── Publisher — публикует дайджест в канал ───────────────
-  # publisher:
-  #   build: ./app/publisher
-  #   container_name: tg_digest_publisher
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   environment:
-  #     APP_ENV: prod
-  #     POSTGRES_DB: tg_digest
-  #     POSTGRES_USER: tg_digest
-  #     DB_HOST: postgres
-  #     DB_PORT: 5432
-  #     CHANNELS_CONFIG: /app/config/channels.yml
-  #     PUBLISH_INTERVAL_SEC: 300
-  #     DEBUG: "false"
-  #   volumes:
   #     - ./config:/app/config:ro
   #   secrets:
   #     - tg_api_id

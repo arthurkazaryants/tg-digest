@@ -21,15 +21,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelna
 logger = logging.getLogger("reader")
 
 # ── Конфигурация ─────────────────────────────────────────
-CONFIG_PATH = os.getenv("CHANNELS_CONFIG", "/app/config/channels.yml")
+CONFIG_PATH = os.getenv("CONFIG", "/app/config/config.yml")
+
+# Параметры берутся из конфига, env vars - только для override
 FETCH_MODE = os.getenv("FETCH_MODE", "polling")  # "once" или "polling"
-POLL_INTERVAL_SEC = int(os.getenv("POLL_INTERVAL_SEC", "3600"))
-BACKFILL_DAYS = int(os.getenv("BACKFILL_DAYS", "14"))
 DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 
 # Database pool configuration (now configurable)
 DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "5"))
 DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
+
+# Constants for filtering and database operations
+DEFAULT_SCHEDULE = "0 */4 * * *"  # Every 4 hours
+DEFAULT_POLL_INTERVAL = 3600  # seconds
+MAX_TEXT_LENGTH = 4096  # Telegram message limit
+DEFAULT_FETCH_LIMIT = 50  # Default limit for fetching messages per channel
 
 if DEBUG_MODE:
     logger.setLevel(logging.DEBUG)
@@ -72,13 +78,18 @@ def load_config(path: str = None) -> dict:
         raise ValueError(f"Invalid YAML in config: {e}")
 
 
-def load_channels_and_tag_filters(path: str = None) -> tuple[list[dict], dict]:
-    """Загружает каналы и фильтры по тегам из конфига (один раз).
+def load_reader_config(path: str = None) -> tuple[dict, list[dict], dict]:
+    """Загружает конфигурацию Reader и каналы.
     
     Возвращает:
-        (channels, tag_filters) где tag_filters = {"jobs": {...}, "news": {...}, ...}
+        (reader_config, channels, tag_filters)
     """
     config = load_config(path)
+    
+    # Reader конфиг
+    reader_config = config.get("reader", {})
+    if not reader_config:
+        raise ValueError("reader section not found in config")
     
     channels = config.get("channels", [])
     if not channels:
@@ -89,12 +100,82 @@ def load_channels_and_tag_filters(path: str = None) -> tuple[list[dict], dict]:
         raise ValueError("tag_filters not found in config")
     
     logger.debug("Loaded %d channels and tag_filters for tags: %s", len(channels), list(tag_filters.keys()))
-    return channels, tag_filters
+    return reader_config, channels, tag_filters
+
+
+def validate_config(config: dict) -> None:
+    """Валидирует структуру конфига на наличие required fields.
+    
+    Raises:
+        ValueError: если конфиг некорректен
+    """
+    # Reader section
+    reader = config.get("reader")
+    if not reader:
+        raise ValueError("Missing required section: reader")
+    
+    if "schedule" not in reader:
+        raise ValueError("Missing required field: reader.schedule (e.g., '0 */4 * * *')")
+    
+    # Channels section
+    channels = config.get("channels")
+    if not channels or not isinstance(channels, list):
+        raise ValueError("Missing required section: channels (must be a non-empty list)")
+    
+    for i, ch in enumerate(channels):
+        if not ch.get("username"):
+            raise ValueError(f"Channel #{i}: missing required field 'username'")
+        if not ch.get("tags"):
+            raise ValueError(f"Channel '{ch.get('username')}': missing required field 'tags'")
+    
+    # Tag filters section
+    tag_filters = config.get("tag_filters")
+    if not tag_filters or not isinstance(tag_filters, dict):
+        raise ValueError("Missing required section: tag_filters")
+    
+    # Validate each tag filter
+    for tag_name, tag_filter in tag_filters.items():
+        if not isinstance(tag_filter, dict):
+            raise ValueError(f"tag_filters.{tag_name}: must be a dictionary")
+        
+        if "include_keywords" not in tag_filter:
+            raise ValueError(f"tag_filters.{tag_name}: missing required field 'include_keywords'")
+    
+    # Publisher section (if present, should be valid)
+    publisher = config.get("publisher")
+    if publisher:
+        if not isinstance(publisher, dict):
+            raise ValueError("publisher: must be a dictionary")
+        if "sources" in publisher and not isinstance(publisher["sources"], dict):
+            raise ValueError("publisher.sources: must be a dictionary")
+    
+    logger.debug("Config validation passed")
 
 
 def text_to_lower(text: str) -> str:
     """Приводит текст к нижнему регистру для сравнения."""
     return text.lower() if text else ""
+
+
+def parse_cron(cron_str: str) -> dict:
+    """Парсит cron строку в параметры для APScheduler.
+    
+    Формат: "minute hour day month day_of_week"
+    Пример: "0 */4 * * *" → каждые 4 часа в 0 минут
+    """
+    parts = cron_str.split()
+    if len(parts) != 5:
+        raise ValueError(f"Invalid cron format: {cron_str}. Expected 'minute hour day month day_of_week'")
+    
+    minute, hour, day, month, day_of_week = parts
+    
+    return {
+        'minute': minute,
+        'hour': hour,
+        'day': day,
+        'month': month,
+        'day_of_week': day_of_week,
+    }
 
 
 def matches_keywords(text: str, keywords: list[str], match_all: bool = False) -> bool:
@@ -214,6 +295,7 @@ async def init_db(pool: asyncpg.Pool):
                 posted_at    TIMESTAMPTZ,
                 text         TEXT,
                 views        INT DEFAULT 0,
+                published    BOOLEAN DEFAULT false,
                 fetched_at   TIMESTAMPTZ DEFAULT now(),
                 UNIQUE (channel, message_id)
             );
@@ -228,6 +310,11 @@ async def init_db(pool: asyncpg.Pool):
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_message_id 
             ON raw_posts(message_id);
+        """)
+        
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_published
+            ON raw_posts(published);
         """)
         
         logger.debug("Database initialized successfully")
@@ -303,7 +390,11 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
 
 async def fetch_all_channels(client: TelegramClient, pool: asyncpg.Pool):
     """Выполняет один цикл опроса всех каналов с применением фильтров по тегам."""
-    channels, tag_filters = load_channels_and_tag_filters()
+    try:
+        reader_config, channels, tag_filters = load_reader_config()
+    except Exception as e:
+        logger.error("Failed to load configuration: %s", e)
+        return
     
     logger.info("Starting fetch cycle for %d channels", len(channels))
     logger.info("Loaded tag_filters for tags: %s", list(tag_filters.keys()))
@@ -333,11 +424,15 @@ async def main():
     
     logger.info("All secrets verified successfully")
     
-    # Загрузка конфига (проверка синтаксиса и наличие tag_filters)
+    # Загрузка конфига (проверка синтаксиса и валидность структуры)
     logger.info("Loading configuration...")
     try:
-        channels, tag_filters = load_channels_and_tag_filters()
+        config = load_config()
+        validate_config(config)  # Validate structure
+        reader_config, channels, tag_filters = load_reader_config()
         logger.info("✓ Config loaded: %d channels with tags %s", len(channels), list(tag_filters.keys()))
+        logger.info("✓ Reader config: schedule=%s, poll_interval=%ds", 
+                    reader_config.get('schedule'), reader_config.get('poll_interval_sec', 3600))
     except Exception as e:
         logger.critical("Failed to load config: %s", e)
         raise SystemExit(1) from e
@@ -363,17 +458,22 @@ async def main():
     await init_db(pool)
 
     try:
+        # Получаем параметры из конфига
+        schedule = reader_config.get('schedule', '0 */4 * * *')  # По умолчанию каждые 4 часа
+        poll_interval = reader_config.get('poll_interval_sec', 3600)  # Для режима polling
+        
         if FETCH_MODE == "once":
             logger.info("Mode: ONCE - performing single fetch cycle")
             await fetch_all_channels(client, pool)
         else:
-            logger.info("Mode: POLLING - starting scheduler with interval %d seconds", POLL_INTERVAL_SEC)
+            logger.info("Mode: POLLING - starting scheduler with cron schedule: %s", schedule)
             
             scheduler = AsyncIOScheduler()
+            # Используем cron расписание из конфига
             scheduler.add_job(
                 fetch_all_channels,
-                "interval",
-                seconds=POLL_INTERVAL_SEC,
+                "cron",
+                **parse_cron(schedule),
                 args=(client, pool),
                 id="fetch_channels_job",
             )
