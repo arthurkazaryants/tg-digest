@@ -1,0 +1,121 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: tg_digest_postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: tg_digest
+      POSTGRES_USER: tg_digest
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets:
+      - pg_password
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tg_digest -d tg_digest"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Reader — собирает посты из Telegram-каналов ─────────
+  reader:
+    build: ./app/reader
+    container_name: tg_digest_reader
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: prod
+      POSTGRES_DB: tg_digest
+      POSTGRES_USER: tg_digest
+      DB_HOST: postgres
+      DB_PORT: 5432
+      CHANNELS_CONFIG: /app/config/channels.yml
+      FETCH_MODE: polling
+      POLL_INTERVAL_SEC: 3600
+      BACKFILL_DAYS: 14
+      DEBUG: "false"
+      DB_POOL_MIN_SIZE: "5"
+      DB_POOL_MAX_SIZE: "20"
+    secrets:
+      - tg_api_id
+      - tg_api_hash
+      - tg_reader_session
+      - pg_password
+    volumes:
+      #- ./config/channels.yml:/app/config/channels.yml:ro
+      - ./config:/app/config:ro
+
+  # ── Engine — обрабатывает посты через LLM ───────────────
+  # engine:
+  #   build: ./app/engine
+  #   container_name: tg_digest_engine
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     APP_ENV: prod
+  #     POSTGRES_DB: tg_digest
+  #     POSTGRES_USER: tg_digest
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     CHANNELS_CONFIG: /app/config/channels.yml
+  #     DIGEST_TIMEZONE: Europe/Moscow
+  #     DEBUG: "false"
+  #   secrets:
+  #     - llm_api_key
+  #     - pg_password
+  #   volumes:
+  #     #- ./config/prompts:/app/config/prompts:ro
+  #     - ./config:/app/config:ro
+
+  # ── Publisher — публикует дайджест в канал ───────────────
+  # publisher:
+  #   build: ./app/publisher
+  #   container_name: tg_digest_publisher
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     APP_ENV: prod
+  #     POSTGRES_DB: tg_digest
+  #     POSTGRES_USER: tg_digest
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     CHANNELS_CONFIG: /app/config/channels.yml
+  #     PUBLISH_INTERVAL_SEC: 300
+  #     DEBUG: "false"
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #   secrets:
+  #     - tg_api_id
+  #     - tg_api_hash
+  #     - tg_publisher_session
+  #     - pg_password
+
+# ── Secrets (Docker Secrets из файлов) ────────────────────
+secrets:
+  pg_password:
+    file: ../tg-digest-secrets/pg_password.txt
+  llm_api_key:
+    file: ../tg-digest-secrets/llm_api_key.txt
+  tg_api_id:
+    file: ../tg-digest-secrets/tg_api_id.txt
+  tg_api_hash:
+    file: ../tg-digest-secrets/tg_api_hash.txt
+  tg_reader_session:
+    file: ../tg-digest-secrets/tg_reader_session.txt
+  tg_publisher_session:
+    file: ../tg-digest-secrets/tg_publisher_session.txt

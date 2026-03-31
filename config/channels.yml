@@ -1,0 +1,208 @@
+# ═══════════════════════════════════════════════════════════════════
+# Конфигурация TG-Digest: reader → engine → publisher
+# ═══════════════════════════════════════════════════════════════════
+#
+# СТРУКТУРА (слева направо — порядок обработки):
+#
+# READER (✓ активно сейчас)
+#   ├─ channels       ← какие каналы собирать из Telegram
+#   ├─ tag_filters    ← как фильтровать посты перед сохранением
+#   └─ news/learning_topics ← примеры подклассификации (на будущее)
+#
+# ENGINE (на будущее, когда реализуется LLM обработка)
+#   ├─ sources_for_engine  ← откуда брать посты из БД (какие теги)
+#   └─ llm_prompts         ← как обрабатывать (системные промпты)
+#
+# PUBLISHER (на будущее, когда реализуется отправка дайджестов)
+#   ├─ sources_for_publisher  ← откуда брать обработанные посты
+#   └─ routing                ← где и когда публиковать
+#
+# ═══════════════════════════════════════════════════════════════════
+
+
+
+# ═════════════════════════════════════════════════════════════════
+# 1️⃣  READER: Сбор постов из Telegram (АКТИВНО)
+# ═════════════════════════════════════════════════════════════════
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Каналы для мониторинга
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# username  — имя Telegram-канала (без @)
+# limit     — макс. последних постов за один опрос
+# tags      — категории для связи с tag_filters
+
+channels:
+  - username: remote_it_jobs
+    limit: 40
+    tags: [jobs]
+
+#  - username: devops_deflope
+#    limit: 50
+#    tags: [jobs, news]
+#  - username: habr_com
+#    limit: 50
+#    tags: [news, learning]
+#  - username: pythonl
+#    limit: 40
+#    tags: [learning]
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Фильтры по тегам (универсальный механизм)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# include_keywords — ОБЯЗАТЕЛЕН!
+# exclude_keywords, location_preferences, seniority — опциональны
+
+tag_filters:
+  
+  jobs:
+    include_keywords:
+      - "cto"
+      - "cio"
+      - "it director"
+      - "head of infrastructure"
+      - "director of engineering"
+      - "devops"
+      - "platform"
+      - "cloud"
+      - "kubernetes"
+      - "sre"
+      - "architecture"
+      - "fintech"
+      - "payments"
+      # - "*"  # Раскомментируйте для тестирования
+    
+    exclude_keywords:
+      - "junior"
+      - "intern"
+      - "стажер"
+      - "sales"
+      - "designer"
+    
+    location_preferences:
+      - "remote"
+      - "удаленно"
+      - "hybrid"
+      - "москва"
+      - "санкт-петербург"
+    
+    seniority:
+      - "lead"
+      - "head"
+      - "director"
+      - "principal"
+
+  # news:
+  #   include_keywords: ["*"]
+  #   exclude_keywords: []
+
+  # learning:
+  #   include_keywords: ["architecture", "design patterns", "tutorial", "guide"]
+  #   exclude_keywords: []
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Примеры подклассификации (на будущее)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# news_topics:
+#   - name: "AI"
+#     keywords: ["ai", "llm", "gpt", "agent", "rag", "genai", "transformer"]
+#   - name: "Infra/DevOps"
+#     keywords: ["kubernetes", "docker", "observability", "sre", "platform", "devops", "terraform"]
+#   - name: "Security"
+#     keywords: ["security", "iam", "oauth", "zero trust", "vulnerability", "cve", "exploit"]
+#   - name: "Web/Mobile"
+#     keywords: ["react", "nextjs", "flutter", "android", "ios", "web development"]
+#   - name: "Business"
+#     keywords: ["рынок", "инвестиции", "компания", "сделка", "финансы", "startup", "unicorn"]
+
+# learning_topics:
+#   - name: "Architecture"
+#     keywords: ["architecture", "ddd", "microservices", "event-driven", "distributed systems"]
+#   - name: "Management"
+#     keywords: ["leadership", "management", "team", "process", "agile", "scrum", "kanban"]
+#   - name: "Performance"
+#     keywords: ["optimization", "performance", "benchmark", "profiling", "scaling"]
+#   - name: "Testing"
+#     keywords: ["testing", "unit test", "integration test", "e2e", "tdd", "bdd"]
+#   - name: "DevTools"
+#     keywords: ["git", "ci/cd", "github", "gitlab", "jenkins", "docker", "kubernetes"]
+
+
+# ═════════════════════════════════════════════════════════════════
+# 2️⃣  ENGINE: Обработка постов через LLM (на будущее)
+# ═════════════════════════════════════════════════════════════════
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Источники для ENGINE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ШАГ 1: Откуда брать посты из БД (какие теги)
+
+# sources_for_engine:
+#   jobs:
+#     enabled: true
+#     batch_size: 10
+#     priority: "high"
+#   # news:
+#   #   enabled: false
+#   # learning:
+#   #   enabled: false
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Системные промпты для LLM
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ШАГ 2: Как обрабатывать (какие промпты для нейронки)
+
+# llm_prompts:
+#   jobs: "/app/config/prompts/jobs.txt"
+#   # news: "/app/config/prompts/news.txt"
+#   # learning: "/app/config/prompts/learning.txt"
+
+
+# ═════════════════════════════════════════════════════════════════
+# 3️⃣  PUBLISHER: Публикация дайджестов (на будущее)
+# ═════════════════════════════════════════════════════════════════
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Источники для PUBLISHER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ШАГ 1: Откуда брать обработанные посты
+
+# sources_for_publisher:
+#   jobs:
+#     enabled: true
+#     batch_size: 5
+#   # news:
+#   #   enabled: false
+#   # learning:
+#   #   enabled: false
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Маршрутизация в целевые каналы
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ШАГ 2: Где и когда публиковать
+
+# routing:
+#   jobs:
+#     target: "@my_digest_jobs"
+#     mode: "instant_or_digest"
+#     schedule:
+#       - "09:00 Europe/Moscow"
+#       - "14:00 Europe/Moscow"
+#       - "19:00 Europe/Moscow"
+#     format: "compact"
+#   # news:
+#   #   target: "@my_digest_news"
+#   #   mode: "digest"
+#   #   schedule:
+#   #     - "09:30 Europe/Moscow"
+#   #     - "18:30 Europe/Moscow"
+#   # learning:
+#   #   target: "@my_digest_learning"
+#   #   mode: "digest"
+#   #   schedule:
+#   #     - "21:00 Europe/Moscow"

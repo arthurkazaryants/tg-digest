@@ -1,0 +1,42 @@
+# Secrets и конфиги с чувствительными данными
+../tg-digest-secrets/
+tg-digest-secrets/
+.env
+.env.local
+.env.*.local
+
+# PostgreSQL данные
+data/
+data/postgres/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+env3/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+.tmp/
+tmp/
+*.tmp
+
+# Docker
+.dockerignore
+docker-compose.override.yml

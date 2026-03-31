@@ -1,0 +1,414 @@
+"""
+Reader — подключается к Telegram через Telethon,
+читает новые посты из каналов (channels.yml) и сохраняет в PostgreSQL.
+Работает в режиме polling с настраиваемым интервалом опроса.
+"""
+
+import asyncio
+import logging
+import os
+import signal
+import time
+from pathlib import Path
+
+import asyncpg
+import yaml
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+logger = logging.getLogger("reader")
+
+# ── Конфигурация ─────────────────────────────────────────
+CONFIG_PATH = os.getenv("CHANNELS_CONFIG", "/app/config/channels.yml")
+FETCH_MODE = os.getenv("FETCH_MODE", "polling")  # "once" или "polling"
+POLL_INTERVAL_SEC = int(os.getenv("POLL_INTERVAL_SEC", "3600"))
+BACKFILL_DAYS = int(os.getenv("BACKFILL_DAYS", "14"))
+DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
+
+# Database pool configuration (now configurable)
+DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "5"))
+DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
+
+if DEBUG_MODE:
+    logger.setLevel(logging.DEBUG)
+else:
+    logger.setLevel(logging.INFO)
+
+
+def read_secret(name: str) -> str:
+    """Читает Docker-secret из /run/secrets/<name>."""
+    secret_path = Path(f"/run/secrets/{name}")
+    try:
+        if secret_path.exists():
+            content = secret_path.read_text().strip()
+            if not content:
+                raise ValueError(f"Secret {name} is empty")
+            logger.debug("Loaded secret: %s", name)
+            return content
+        raise FileNotFoundError(f"Secret {name} not found at {secret_path}")
+    except Exception as e:
+        logger.error("Failed to load secret %s: %s", name, e)
+        raise
+
+
+def load_config(path: str = None) -> dict:
+    """Загружает весь конфиг."""
+    if path is None:
+        path = CONFIG_PATH
+    
+    logger.info("Loading config from %s", path)
+    try:
+        with open(path) as f:
+            config = yaml.safe_load(f)
+        if not config:
+            raise ValueError("Config file is empty")
+        logger.debug("Config loaded successfully")
+        return config
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {path}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in config: {e}")
+
+
+def load_channels_and_tag_filters(path: str = None) -> tuple[list[dict], dict]:
+    """Загружает каналы и фильтры по тегам из конфига (один раз).
+    
+    Возвращает:
+        (channels, tag_filters) где tag_filters = {"jobs": {...}, "news": {...}, ...}
+    """
+    config = load_config(path)
+    
+    channels = config.get("channels", [])
+    if not channels:
+        raise ValueError("No channels found in config")
+    
+    tag_filters = config.get("tag_filters", {})
+    if not tag_filters:
+        raise ValueError("tag_filters not found in config")
+    
+    logger.debug("Loaded %d channels and tag_filters for tags: %s", len(channels), list(tag_filters.keys()))
+    return channels, tag_filters
+
+
+def text_to_lower(text: str) -> str:
+    """Приводит текст к нижнему регистру для сравнения."""
+    return text.lower() if text else ""
+
+
+def matches_keywords(text: str, keywords: list[str], match_all: bool = False) -> bool:
+    """Проверяет, соответствует ли текст ключевым словам.
+    
+    match_all=True: все ключевые слова должны быть в тексте
+    match_all=False: хотя бы одно ключевое слово должно быть
+    """
+    if not keywords:
+        return True
+    text_lower = text_to_lower(text)
+    matches = [kw.lower() in text_lower for kw in keywords]
+    return all(matches) if match_all else any(matches)
+
+
+def apply_tag_filters(text: str, tag_filter: dict) -> bool:
+    """Применяет фильтры для конкретного тега к тексту сообщения.
+    
+    Args:
+        text: текст сообщения
+        tag_filter: словарь фильтра для тега {include_keywords, exclude_keywords, ...}
+    
+    Returns:
+        True если сообщение проходит все фильтры тега
+    """
+    if not tag_filter:
+        raise ValueError("Tag filter is empty")
+    
+    include_keywords = tag_filter.get("include_keywords", [])
+    
+    # include_keywords ОБЯЗАТЕЛЕН
+    if not include_keywords:
+        raise ValueError("include_keywords is required in tag filter. Use ['*'] to include all messages.")
+    
+    # Проверяем специальный символ "все сообщения"
+    if include_keywords != ["*"]:
+        # Должно быть хотя бы одно ключевое слово включения
+        if not matches_keywords(text, include_keywords, match_all=False):
+            return False
+    
+    # Не должно быть ключевых слов исключения
+    exclude_keywords = tag_filter.get("exclude_keywords", [])
+    if exclude_keywords and matches_keywords(text, exclude_keywords, match_all=False):
+        return False
+    
+    # Проверяем seniority (если указан)
+    seniority = tag_filter.get("seniority", [])
+    if seniority and not matches_keywords(text, seniority, match_all=False):
+        return False
+    
+    # Проверяем location (если указан)
+    location_prefs = tag_filter.get("location_preferences", [])
+    if location_prefs and not matches_keywords(text, location_prefs, match_all=False):
+        return False
+    
+    return True
+
+
+def should_save_post(text: str, channel_tags: list[str], tag_filters: dict) -> bool:
+    """Определяет, нужно ли сохранять сообщение в БД на основе его тегов.
+    
+    Сообщение сохраняется если оно проходит фильтры для хотя бы одного тега канала.
+    
+    Args:
+        text: текст сообщения
+        channel_tags: теги канала (например ["jobs"], ["jobs", "news"])
+        tag_filters: загруженные фильтры {"jobs": {...}, "news": {...}, ...}
+    
+    Returns:
+        True если сообщение проходит фильтры хотя бы одного из тегов
+    """
+    if not text or not channel_tags:
+        return False
+    
+    # Проверяем каждый тег канала
+    for tag in channel_tags:
+        if tag in tag_filters:
+            try:
+                if apply_tag_filters(text, tag_filters[tag]):
+                    logger.debug("Post matches tag filter: %s", tag)
+                    return True  # Если фильтр тега пройден, сохраняем
+            except ValueError as e:
+                logger.warning("Error applying filter for tag %s: %s", tag, e)
+                continue
+    
+    # Если ни один тег не пройден
+    return False
+
+
+async def get_db_pool() -> asyncpg.Pool:
+    password = read_secret("pg_password")
+    
+    postgres_user = os.getenv("POSTGRES_USER", "tg_digest")
+    postgres_db = os.getenv("POSTGRES_DB", "tg_digest")
+    
+    logger.info("Creating database connection pool for user=%s, db=%s (pool_size=%d..%d)", 
+                postgres_user, postgres_db, DB_POOL_MIN_SIZE, DB_POOL_MAX_SIZE)
+    return await asyncpg.create_pool(
+        host="postgres",
+        port=5432,
+        user=postgres_user,
+        password=password,
+        database=postgres_db,
+        min_size=DB_POOL_MIN_SIZE,
+        max_size=DB_POOL_MAX_SIZE,
+    )
+
+
+async def init_db(pool: asyncpg.Pool):
+    async with pool.acquire() as conn:
+        # Создание таблицы
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS raw_posts (
+                id           BIGSERIAL PRIMARY KEY,
+                channel      TEXT NOT NULL,
+                message_id   BIGINT NOT NULL,
+                posted_at    TIMESTAMPTZ,
+                text         TEXT,
+                views        INT DEFAULT 0,
+                fetched_at   TIMESTAMPTZ DEFAULT now(),
+                UNIQUE (channel, message_id)
+            );
+        """)
+        
+        # Создание индексов для быстрого поиска
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_channel_posted_at 
+            ON raw_posts(channel, posted_at DESC);
+        """)
+        
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_message_id 
+            ON raw_posts(message_id);
+        """)
+        
+        logger.debug("Database initialized successfully")
+
+
+async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dict, tag_filters: dict):
+    """Загружает и фильтрует сообщения из канала (только новые после последней синхронизации)."""
+    start_time = time.time()
+    channel_name = channel["username"]
+    
+    # Пытаемся получить сущность канала с обработкой ошибок
+    try:
+        entity = await client.get_entity(channel_name)
+    except Exception as e:
+        logger.error("Failed to get entity for channel %s: %s. Skipping this channel.", channel_name, e)
+        return
+    
+    limit = channel.get("limit", 50)
+    tags = channel.get("tags", [])
+    
+    # Получаем последний message_id для этого канала
+    async with pool.acquire() as conn:
+        last_message_id = await conn.fetchval(
+            "SELECT MAX(message_id) FROM raw_posts WHERE channel = $1",
+            channel_name
+        )
+    last_message_id = last_message_id or 0
+    
+    logger.info("Fetching messages from %s (last_id=%d, limit=%d, tags=%s)", 
+                channel_name, last_message_id, limit, tags)
+
+    messages_to_insert = []
+    filtered_count = 0
+    
+    # Загружаем только сообщения с ID > last_message_id
+    async for message in client.iter_messages(entity, limit=limit, min_id=last_message_id):
+        if not message.text:
+            continue
+        
+        # Применяем фильтры на основе тегов канала
+        if not should_save_post(message.text, tags, tag_filters):
+            filtered_count += 1
+            logger.debug("Filtered message from %s (ID: %d)", channel_name, message.id)
+            continue
+        
+        messages_to_insert.append((
+            channel["username"],
+            message.id,
+            message.date,
+            message.text,
+            message.views or 0,
+        ))
+
+    # Батч-вставка для эффективности
+    if messages_to_insert:
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO raw_posts (channel, message_id, posted_at, text, views)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (channel, message_id) DO NOTHING
+                """,
+                messages_to_insert,
+            )
+        elapsed = time.time() - start_time
+        logger.info("✓ Channel %s: inserted %d messages (filtered out %d) in %.2f seconds", 
+                   channel_name, len(messages_to_insert), filtered_count, elapsed)
+    else:
+        elapsed = time.time() - start_time
+        logger.info("✓ Channel %s: no new messages (filtered out %d) in %.2f seconds", 
+                   channel_name, filtered_count, elapsed)
+
+
+async def fetch_all_channels(client: TelegramClient, pool: asyncpg.Pool):
+    """Выполняет один цикл опроса всех каналов с применением фильтров по тегам."""
+    channels, tag_filters = load_channels_and_tag_filters()
+    
+    logger.info("Starting fetch cycle for %d channels", len(channels))
+    logger.info("Loaded tag_filters for tags: %s", list(tag_filters.keys()))
+    
+    for ch in channels:
+        try:
+            await fetch_channel(client, pool, ch, tag_filters)
+        except Exception:
+            logger.exception("Error fetching %s", ch.get("username"))
+    
+    logger.info("Fetch cycle completed")
+
+
+async def main():
+    logger.info("Starting reader service...")
+    
+    # Проверка всех необходимых secrets перед началом работы
+    logger.info("Verifying secrets...")
+    required_secrets = ["tg_api_id", "tg_api_hash", "tg_reader_session", "pg_password"]
+    for secret_name in required_secrets:
+        try:
+            read_secret(secret_name)
+            logger.info("✓ Secret %s found", secret_name)
+        except (FileNotFoundError, ValueError) as e:
+            logger.critical("Missing or invalid secret: %s. Cannot start. Error: %s", secret_name, e)
+            raise SystemExit(1) from e
+    
+    logger.info("All secrets verified successfully")
+    
+    # Загрузка конфига (проверка синтаксиса и наличие tag_filters)
+    logger.info("Loading configuration...")
+    try:
+        channels, tag_filters = load_channels_and_tag_filters()
+        logger.info("✓ Config loaded: %d channels with tags %s", len(channels), list(tag_filters.keys()))
+    except Exception as e:
+        logger.critical("Failed to load config: %s", e)
+        raise SystemExit(1) from e
+    
+    # Подключение к Telegram
+    api_id = int(read_secret("tg_api_id"))
+    api_hash = read_secret("tg_api_hash")
+    session_str = read_secret("tg_reader_session")
+
+    # Создаём клиент с сохранённой сессией (если существует)
+    if not session_str or not session_str.strip():
+        logger.warning("Empty session string - will require new Telegram authentication")
+        session = StringSession()
+    else:
+        session = StringSession(session_str)
+    client = TelegramClient(session, api_id, api_hash)
+    
+    logger.info("Connecting to Telegram...")
+    await client.start()
+    logger.info("✓ Successfully connected to Telegram")
+
+    pool = await get_db_pool()
+    await init_db(pool)
+
+    try:
+        if FETCH_MODE == "once":
+            logger.info("Mode: ONCE - performing single fetch cycle")
+            await fetch_all_channels(client, pool)
+        else:
+            logger.info("Mode: POLLING - starting scheduler with interval %d seconds", POLL_INTERVAL_SEC)
+            
+            scheduler = AsyncIOScheduler()
+            scheduler.add_job(
+                fetch_all_channels,
+                "interval",
+                seconds=POLL_INTERVAL_SEC,
+                args=(client, pool),
+                id="fetch_channels_job",
+            )
+            scheduler.start()
+            
+            # Выполнить первый цикл сразу
+            await fetch_all_channels(client, pool)
+            
+            # Ждём сигнала завершения
+            shutdown_event = asyncio.Event()
+            
+            def handle_signal(signum, frame):
+                logger.info("Received signal %d, shutting down...", signum)
+                shutdown_event.set()
+            
+            signal.signal(signal.SIGTERM, handle_signal)
+            signal.signal(signal.SIGINT, handle_signal)
+            
+            try:
+                await shutdown_event.wait()
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt received")
+            
+            logger.info("Stopping scheduler...")
+            scheduler.shutdown(wait=True)
+    
+    finally:
+        logger.info("Closing database pool...")
+        await pool.close()
+        
+        logger.info("Disconnecting from Telegram...")
+        await client.disconnect()
+        
+        logger.info("Reader finished")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
