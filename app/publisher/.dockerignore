@@ -1,0 +1,34 @@
+# .dockerignore for publisher service
+# (копия из reader/ — адаптируй при необходимости)
+
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+.pytest_cache/
+
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+.git/
+.gitignore
+
+Thumbs.db
+.DS_Store
+
+.coverage
+htmlcov/
+
+dist/
+build/
+*.egg-info/
+
+.env
+.env.local
+.env.*.local
+
+README.md
+*.md
+docs/

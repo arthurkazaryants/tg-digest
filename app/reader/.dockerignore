@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════════
+# .dockerignore for reader service
+#
+# Контекст сборки: ./app/reader/
+# Применяется при: docker build ./app/reader
+#       или: docker-compose build reader
+# ═══════════════════════════════════════════════════════════════════
+
+# Python temporary files and cache
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+.pytest_cache/
+.pytype/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Version control
+.git/
+.gitignore
+.github/
+
+# OS specific
+Thumbs.db
+.DS_Store
+
+# Testing and coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# Documentation (not needed in runtime image)
+README.md
+*.md
+docs/

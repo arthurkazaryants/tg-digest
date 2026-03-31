@@ -1,0 +1,70 @@
+# ═══════════════════════════════════════════════════════════════════
+# .dockerignore — файлы исключаемые из контекста Docker сборки
+# 
+# ПРИМЕЧАНИЕ: этот файл применяется к контексту сборки
+# Используется при: docker build .
+# НЕ применяется при: docker build ./app/reader (из subdirectory)
+# ═══════════════════════════════════════════════════════════════════
+
+# Secrets и конфиги (CRITICAL — never include in image)
+../tg-digest-secrets/
+.env
+.env.*
+
+# Git (version control not needed in images)
+.git/
+.gitignore
+.gitattributes
+
+# Docker/Compose files (build context, not needed in image)
+docker-compose.yml
+docker-compose*.yml
+docker-compose.override.yml
+.dockerignore
+# NOTE: Do NOT exclude Dockerfile* — they are needed for reference
+
+# IDE и editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Логи и временные файлы
+*.log
+logs/
+*.tmp
+tmp/
+.tmp/
+data/
+
+# Python cache and artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+env3/
+dist/
+build/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Документация (not needed in image)
+README.md
+docs/
+*.md
+CHANGELOG.md
+LICENSE
+
+# Development files
+.env.local
+.env.*.local
+docker-compose.override.yml
+.pytest_cache/
+.coverage
