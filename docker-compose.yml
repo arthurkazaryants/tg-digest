@@ -52,14 +52,12 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       CONFIG: /app/config/config.yml
-      FETCH_MODE: polling
     secrets:
       - tg_api_id
       - tg_api_hash
       - tg_reader_session
       - pg_password
     volumes:
-      #- ./config/channels.yml:/app/config/channels.yml:ro
       - ./config:/app/config:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import asyncio, asyncpg; asyncio.run(asyncpg.connect('postgresql://tg_digest@postgres:5432/tg_digest', password='dummy'))" ]

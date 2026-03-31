@@ -37,8 +37,7 @@ if DB_POOL_MIN_SIZE > DB_POOL_MAX_SIZE:
 
 # Constants for filtering and database operations
 DEFAULT_SCHEDULE = "0 */4 * * *"  # Every 4 hours
-DEFAULT_POLL_INTERVAL = 3600  # seconds
-MAX_TEXT_LENGTH = 4096  # Telegram message limit
+DEFAULT_POLL_INTERVAL = 3600  # seconds (unused - for documentation)
 DEFAULT_FETCH_LIMIT = 50  # Default limit for fetching messages per channel
 
 if DEBUG_MODE:
@@ -468,7 +467,6 @@ async def main():
     try:
         # Получаем параметры из конфига
         schedule = reader_config.get('schedule', '0 */4 * * *')  # По умолчанию каждые 4 часа
-        poll_interval = reader_config.get('poll_interval_sec', 3600)  # Для режима polling
         
         if FETCH_MODE == "once":
             logger.info("Mode: ONCE - performing single fetch cycle")
