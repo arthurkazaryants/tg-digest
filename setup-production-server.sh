@@ -3,10 +3,12 @@
 ################################################################################
 # TG-Digest Production Server Setup Script
 # 
-# Подготавливает сервер к запуску TG-Digest в production:
+# Подготавливает сервер к запуску TG-Digest (Reader + Publisher) в production:
 # - Проверка требований (ОС, привилегии)
 # - Установка Docker и Docker Compose
-# - Подготовка папок и прав доступа
+# - Подготовка папок и прав доступа для Reader и Publisher
+# - Создание Telegram сессионных файлов для обоих сервисов
+# - Настройка безопасности и firewall
 # - Валидация установки
 # 
 # Использование: sudo bash setup-production-server.sh
@@ -419,27 +421,48 @@ echo "   git clone <your-repo-url> ."
 echo ""
 
 echo -e "${YELLOW}4. Review and customize configuration:${NC}"
-echo "   vi $PROJECT_DIR/config/channels.yml"
-echo "   vi $PROJECT_DIR/.env"
-echo "   vi $PROJECT_DIR/docker-compose.yml"
+echo "   vi $PROJECT_DIR/config/config.yml        # Application config (reader + publisher)"
+echo "   vi $PROJECT_DIR/.env                     # Infrastructure only (DB, pooling, debug)"
+echo "   vi $PROJECT_DIR/docker-compose.yml       # Container orchestration"
 echo ""
 
-echo -e "${YELLOW}5. Build and start the reader service:${NC}"
+echo -e "${YELLOW}5. Build services (reader and publisher):${NC}"
 echo "   cd $PROJECT_DIR"
-echo "   docker-compose build reader"
+echo "   docker-compose build reader publisher"
+echo ""
+
+echo -e "${YELLOW}6. Start PostgreSQL database (runs first):${NC}"
+echo "   docker-compose up -d postgres"
+echo ""
+
+echo -e "${YELLOW}7a. Option 1 - Start both reader and publisher:${NC}"
+echo "   docker-compose up -d reader publisher"
+echo ""
+
+echo -e "${YELLOW}7b. Option 2 - Start only reader (collect posts):${NC}"
 echo "   docker-compose up -d reader"
 echo ""
 
-echo -e "${YELLOW}6. Check the logs:${NC}"
-echo "   docker-compose logs -f reader"
+echo -e "${YELLOW}7c. Option 3 - Start both independently with healthchecks:${NC}"
+echo "   docker-compose up -d --wait reader publisher"
+echo ""
+
+echo -e "${YELLOW}8. Check service status and logs:${NC}"
+echo "   docker-compose ps                        # Shows all services"
+echo "   docker-compose logs -f reader            # Reader logs"
+echo "   docker-compose logs -f publisher         # Publisher logs"
+echo "   docker-compose logs -f                   # Combined logs"
 echo ""
 
 echo -e "${GREEN}📁 Directory Structure:${NC}"
-echo "   $PROJECT_DIR/              ← Project root (owner: $APP_USER)"
-echo "   $PROJECT_DIR/config/       ← Configurations"
-echo "   $PROJECT_DIR/app/          ← Application code"
-echo "   $PROJECT_DIR/data/         ← Database storage (owner: $APP_USER)"
-echo "   $SECRETS_DIR/              ← Secrets (owner: $APP_USER, perms: 700)"
+echo "   $PROJECT_DIR/                 ← Project root (owner: $APP_USER)"
+echo "   $PROJECT_DIR/config/          ← Application config (config.yml - shared by reader+publisher)"
+echo "   $PROJECT_DIR/app/             ← Application services"
+echo "   $PROJECT_DIR/app/reader/      ← Reader service (collects posts from Telegram)"
+echo "   $PROJECT_DIR/app/publisher/   ← Publisher service (sends digests to channels)"
+echo "   $PROJECT_DIR/app/engine/      ← Engine service (reserved for LLM integration)"
+echo "   $PROJECT_DIR/data/postgres/   ← Database storage (shared by reader+publisher)"
+echo "   $SECRETS_DIR/                 ← Secrets (owner: $APP_USER, perms: 700)"
 echo ""
 
 echo -e "${GREEN}👤 Application User:${NC}"
@@ -458,13 +481,36 @@ echo "   ✓ PostgreSQL: localhost only (not exposed)"
 echo "   ✓ SSH: protected by firewall"
 echo ""
 
+echo -e "${GREEN}🏗️  Service Architecture:${NC}"
+echo "   Reader Service:"
+echo "     • Fetches posts from Telegram channels (scheduler: cron from config.yml)"
+echo "     • Applies tag filters (include/exclude keywords, location, seniority)"
+echo "     • Inserts posts into raw_posts table"
+echo "     • Runs continuously on schedule (e.g., every 4 hours)"
+echo ""
+echo "   Publisher Service:"
+echo "     • Monitors raw_posts table for unpublished content"
+echo "     • Publishes batches of posts to output channels"
+echo "     • Two modes: scheduled (for automatic digest) + queue overflow monitoring"
+echo "     • Marks posts as published to avoid duplicates"
+echo ""
+echo "   Shared Infrastructure:"
+echo "     • One PostgreSQL database for both services"
+echo "     • One config.yml (sections: reader, channels, tag_filters, publisher)"
+echo "     • One Telegram account (reader session + publisher session stored separately)"
+echo "     • Both services run as user: $APP_USER"
+echo ""
+
 echo -e "${YELLOW}⚠️  IMPORTANT REMINDERS:${NC}"
-echo "   • Use: sudo -u $APP_USER docker-compose ... (for all docker-compose commands)"
-echo "   • Or switch user: sudo -u $APP_USER -i"
-echo "   • Update all secrets with real values before running"
-echo "   • Never commit secrets or .env to git"
-echo "   • Regularly backup PostgreSQL data: $PROJECT_DIR/data/postgres"
-echo "   • Keep Docker images updated: docker-compose pull && docker-compose up -d"
+echo "   • Configuration: Use config.yml (SINGLE source of truth for app config)"
+echo "   • Services: Reader collects posts → Publisher sends digests to output channels"
+echo "   • Database: Both reader and publisher share one PostgreSQL instance"
+echo "   • Commands: Use 'sudo -u $APP_USER docker-compose ...' or switch user first"
+echo "   • Secrets: Update all values (pg_password, tg_api_id/hash, etc) before running"
+echo "   • Reader: Fetches posts based on cron schedule from config.yml"
+echo "   • Publisher: Monitors queue and publishes batches based on same config.yml"
+echo "   • Docker: Keep images updated regularly: docker-compose pull && docker-compose up -d"
+echo "   • Backup: Regularly backup PostgreSQL data: $PROJECT_DIR/data/postgres"
 echo ""
 
 echo -e "${GREEN}✓ Server ready for TG-Digest deployment!${NC}\n"
