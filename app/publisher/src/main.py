@@ -33,6 +33,10 @@ CONFIG_PATH = os.getenv("CONFIG", "/app/config/config.yml")
 DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "5"))
 DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
 
+# Validate pool configuration
+if DB_POOL_MIN_SIZE > DB_POOL_MAX_SIZE:
+    raise ValueError(f"DB_POOL_MIN_SIZE ({DB_POOL_MIN_SIZE}) cannot be greater than DB_POOL_MAX_SIZE ({DB_POOL_MAX_SIZE})")
+
 DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 
 # Constants for config defaults
@@ -176,16 +180,21 @@ def format_post(post: dict) -> str:
         post: словарь с полями {channel, text, posted_at, views}
     
     Returns:
-        Отформатированное сообщение
+        Отформатированное сообщение (макс 4096 символов по лимиту Telegram)
     """
     channel = post["channel"]
     text = post["text"]
     views = post.get("views", 0)
     
-    # Обрезаем текст если очень длинный (TG лимит 4096)
-    max_text_len = 300
-    if len(text) > max_text_len:
-        text = text[:max_text_len] + "…"
+    # Telegram лимит 4096 символов на сообщение
+    # Header/footer примерно: "💼 " + "\n\n📌 Source: @{channel}\n👁 Views: {views}" = ~80-100 символов
+    # Оставляем 150 символов margin на всякий случай
+    TELEGRAM_MESSAGE_LIMIT = 4096
+    HEADER_FOOTER_SIZE = 150  # Conservative estimate for emoji, formatting, channel name, view count
+    MAX_TEXT_LENGTH = TELEGRAM_MESSAGE_LIMIT - HEADER_FOOTER_SIZE
+    
+    if len(text) > MAX_TEXT_LENGTH:
+        text = text[:MAX_TEXT_LENGTH] + "…"
     
     message = f"""💼 {text}
 
@@ -238,16 +247,29 @@ async def mark_as_published(pool: asyncpg.Pool, post_id: int):
 
 
 def parse_cron(cron_str: str) -> dict:
-    """Парсит cron строку в параметры для APScheduler.
+    """Парсит и валидирует cron строку в параметры для APScheduler.
     
     Формат: "minute hour day month day_of_week"
     Пример: "0 */1 * * *" → каждый час в 0 минут
+    
+    Raises:
+        ValueError: если cron формат неправильный или значения невалидны
     """
     parts = cron_str.split()
     if len(parts) != 5:
         raise ValueError(f"Invalid cron format: {cron_str}. Expected 'minute hour day month day_of_week'")
     
     minute, hour, day, month, day_of_week = parts
+    
+    # Базовая валидация (не все случаи, но хотя бы основные)
+    for part, name, min_val, max_val in [(minute, 'minute', 0, 59), (hour, 'hour', 0, 23)]:
+        if part != '*' and '/' not in part and '-' not in part:
+            try:
+                val = int(part)
+                if not (min_val <= val <= max_val):
+                    raise ValueError(f"Invalid {name}: {val} not in range {min_val}-{max_val}")
+            except ValueError as e:
+                raise ValueError(f"Invalid {name} in cron: {part}. Error: {e}")
     
     return {
         'minute': minute,
@@ -265,7 +287,7 @@ async def publish_batch(client: TelegramClient, pool: asyncpg.Pool, config: dict
     """
     start_time = time.time()
     
-    # Получаем первый enabled источник (для теперь только 'jobs')
+    # Получаем первый enabled источник
     sources = config.get('sources', {})
     enabled_sources = {k: v for k, v in sources.items() if v.get('enabled', False)}
     
@@ -273,11 +295,11 @@ async def publish_batch(client: TelegramClient, pool: asyncpg.Pool, config: dict
         logger.warning("No enabled sources in config")
         return
     
-    # Берём первый enabled источник
-    source_tag = list(enabled_sources.keys())[0]
+    # Берём первый enabled источник (можно расширить на multiple источниках в будущем)
+    source_tag = next(iter(enabled_sources.keys()))
     source_config = enabled_sources[source_tag]
-    batch_limit = source_config.get('batch_limit', 10)
-    target_channel = source_config.get('target_channel', '@my_digest_channel')
+    batch_limit = source_config.get('batch_limit', DEFAULT_BATCH_LIMIT)
+    target_channel = source_config.get('target_channel')
     
     # Получаем список неопубликованных постов
     posts = await fetch_unpublished_posts(pool, batch_limit)

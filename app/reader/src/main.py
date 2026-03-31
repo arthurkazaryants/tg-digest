@@ -1,7 +1,7 @@
 """
 Reader — подключается к Telegram через Telethon,
-читает новые посты из каналов (channels.yml) и сохраняет в PostgreSQL.
-Работает в режиме polling с настраиваемым интервалом опроса.
+читает новые посты из каналов (config/config.yml) и сохраняет в PostgreSQL.
+Работает в режиме polling с настраиваемым интервалом опроса или cron расписанием.
 """
 
 import asyncio
@@ -30,6 +30,10 @@ DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 # Database pool configuration (now configurable)
 DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "5"))
 DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
+
+# Validate pool configuration
+if DB_POOL_MIN_SIZE > DB_POOL_MAX_SIZE:
+    raise ValueError(f"DB_POOL_MIN_SIZE ({DB_POOL_MIN_SIZE}) cannot be greater than DB_POOL_MAX_SIZE ({DB_POOL_MAX_SIZE})")
 
 # Constants for filtering and database operations
 DEFAULT_SCHEDULE = "0 */4 * * *"  # Every 4 hours
@@ -221,14 +225,16 @@ def apply_tag_filters(text: str, tag_filter: dict) -> bool:
     if exclude_keywords and matches_keywords(text, exclude_keywords, match_all=False):
         return False
     
-    # Проверяем seniority (если указан)
+    # Проверяем seniority (если указан в фильтре, требуем совпадение)
     seniority = tag_filter.get("seniority", [])
     if seniority and not matches_keywords(text, seniority, match_all=False):
+        logger.debug("Seniority filter failed: no match in text")
         return False
     
-    # Проверяем location (если указан)
+    # Проверяем location (если указан в фильтре, требуем совпадение)
     location_prefs = tag_filter.get("location_preferences", [])
     if location_prefs and not matches_keywords(text, location_prefs, match_all=False):
+        logger.debug("Location filter failed: no match in text")
         return False
     
     return True
@@ -388,14 +394,16 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
                    channel_name, filtered_count, elapsed)
 
 
-async def fetch_all_channels(client: TelegramClient, pool: asyncpg.Pool):
-    """Выполняет один цикл опроса всех каналов с применением фильтров по тегам."""
-    try:
-        reader_config, channels, tag_filters = load_reader_config()
-    except Exception as e:
-        logger.error("Failed to load configuration: %s", e)
-        return
+async def fetch_all_channels(client: TelegramClient, pool: asyncpg.Pool, reader_config: dict, channels: list, tag_filters: dict):
+    """Выполняет один цикл опроса всех каналов с применением фильтров по тегам.
     
+    Args:
+        client: TelegramClient
+        pool: asyncpg connection pool
+        reader_config: reader configuration dict
+        channels: list of channel configurations
+        tag_filters: dict of tag filter configurations
+    """
     logger.info("Starting fetch cycle for %d channels", len(channels))
     logger.info("Loaded tag_filters for tags: %s", list(tag_filters.keys()))
     
@@ -464,7 +472,7 @@ async def main():
         
         if FETCH_MODE == "once":
             logger.info("Mode: ONCE - performing single fetch cycle")
-            await fetch_all_channels(client, pool)
+            await fetch_all_channels(client, pool, reader_config, channels, tag_filters)
         else:
             logger.info("Mode: POLLING - starting scheduler with cron schedule: %s", schedule)
             
@@ -474,13 +482,13 @@ async def main():
                 fetch_all_channels,
                 "cron",
                 **parse_cron(schedule),
-                args=(client, pool),
+                args=(client, pool, reader_config, channels, tag_filters),
                 id="fetch_channels_job",
             )
             scheduler.start()
             
             # Выполнить первый цикл сразу
-            await fetch_all_channels(client, pool)
+            await fetch_all_channels(client, pool, reader_config, channels, tag_filters)
             
             # Ждём сигнала завершения
             shutdown_event = asyncio.Event()
