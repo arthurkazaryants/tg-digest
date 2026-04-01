@@ -1,19 +1,17 @@
 """
 Reader — подключается к Telegram через Telethon,
 читает новые посты из каналов (config/config.yml) и сохраняет в PostgreSQL.
-Работает в режиме polling с настраиваемым интервалом опроса или cron расписанием.
+Работает в режиме непрерывного polling с настраиваемым интервалом опроса.
 """
 
 import asyncio
 import logging
 import os
 import signal
-import time
 from pathlib import Path
 
 import asyncpg
 import yaml
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
@@ -22,10 +20,6 @@ logger = logging.getLogger("reader")
 
 # ── Конфигурация ─────────────────────────────────────────
 CONFIG_PATH = os.getenv("CONFIG", "/app/config/config.yml")
-
-# Параметры берутся из конфига, env vars - только для override
-FETCH_MODE = os.getenv("FETCH_MODE", "polling")  # "once" или "polling"
-DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 
 # Database pool configuration (now configurable)
 DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "5"))
@@ -36,9 +30,11 @@ if DB_POOL_MIN_SIZE > DB_POOL_MAX_SIZE:
     raise ValueError(f"DB_POOL_MIN_SIZE ({DB_POOL_MIN_SIZE}) cannot be greater than DB_POOL_MAX_SIZE ({DB_POOL_MAX_SIZE})")
 
 # Constants for filtering and database operations
-DEFAULT_SCHEDULE = "0 */4 * * *"  # Every 4 hours
-DEFAULT_POLL_INTERVAL = 3600  # seconds (unused - for documentation)
+DEFAULT_POLL_INTERVAL = 600  # seconds = 10 minutes
+DEFAULT_BACKFILL_DAYS = 14
 DEFAULT_FETCH_LIMIT = 50  # Default limit for fetching messages per channel
+
+DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 
 if DEBUG_MODE:
     logger.setLevel(logging.DEBUG)
@@ -117,8 +113,8 @@ def validate_config(config: dict) -> None:
     if not reader:
         raise ValueError("Missing required section: reader")
     
-    if "schedule" not in reader:
-        raise ValueError("Missing required field: reader.schedule (e.g., '0 */4 * * *')")
+    if "poll_interval_sec" not in reader:
+        raise ValueError("Missing required field: reader.poll_interval_sec (e.g., 600 for 10 minutes)")
     
     # Channels section
     channels = config.get("channels")
@@ -158,27 +154,6 @@ def validate_config(config: dict) -> None:
 def text_to_lower(text: str) -> str:
     """Приводит текст к нижнему регистру для сравнения."""
     return text.lower() if text else ""
-
-
-def parse_cron(cron_str: str) -> dict:
-    """Парсит cron строку в параметры для APScheduler.
-    
-    Формат: "minute hour day month day_of_week"
-    Пример: "0 */4 * * *" → каждые 4 часа в 0 минут
-    """
-    parts = cron_str.split()
-    if len(parts) != 5:
-        raise ValueError(f"Invalid cron format: {cron_str}. Expected 'minute hour day month day_of_week'")
-    
-    minute, hour, day, month, day_of_week = parts
-    
-    return {
-        'minute': minute,
-        'hour': hour,
-        'day': day,
-        'month': month,
-        'day_of_week': day_of_week,
-    }
 
 
 def matches_keywords(text: str, keywords: list[str], match_all: bool = False) -> bool:
@@ -438,8 +413,8 @@ async def main():
         validate_config(config)  # Validate structure
         reader_config, channels, tag_filters = load_reader_config()
         logger.info("✓ Config loaded: %d channels with tags %s", len(channels), list(tag_filters.keys()))
-        logger.info("✓ Reader config: schedule=%s, poll_interval=%ds", 
-                    reader_config.get('schedule'), reader_config.get('poll_interval_sec', 3600))
+        poll_interval = reader_config.get('poll_interval_sec', DEFAULT_POLL_INTERVAL)
+        logger.info("✓ Reader config: poll_interval=%ds", poll_interval)
     except Exception as e:
         logger.critical("Failed to load config: %s", e)
         raise SystemExit(1) from e
@@ -464,48 +439,37 @@ async def main():
     pool = await get_db_pool()
     await init_db(pool)
 
-    try:
-        # Получаем параметры из конфига
-        schedule = reader_config.get('schedule', '0 */4 * * *')  # По умолчанию каждые 4 часа
-        
-        if FETCH_MODE == "once":
-            logger.info("Mode: ONCE - performing single fetch cycle")
-            await fetch_all_channels(client, pool, reader_config, channels, tag_filters)
-        else:
-            logger.info("Mode: POLLING - starting scheduler with cron schedule: %s", schedule)
-            
-            scheduler = AsyncIOScheduler()
-            # Используем cron расписание из конфига
-            scheduler.add_job(
-                fetch_all_channels,
-                "cron",
-                **parse_cron(schedule),
-                args=(client, pool, reader_config, channels, tag_filters),
-                id="fetch_channels_job",
-            )
-            scheduler.start()
-            
-            # Выполнить первый цикл сразу
-            await fetch_all_channels(client, pool, reader_config, channels, tag_filters)
-            
-            # Ждём сигнала завершения
-            shutdown_event = asyncio.Event()
-            
-            def handle_signal(signum, frame):
-                logger.info("Received signal %d, shutting down...", signum)
-                shutdown_event.set()
-            
-            signal.signal(signal.SIGTERM, handle_signal)
-            signal.signal(signal.SIGINT, handle_signal)
-            
-            try:
-                await shutdown_event.wait()
-            except KeyboardInterrupt:
-                logger.info("Keyboard interrupt received")
-            
-            logger.info("Stopping scheduler...")
-            scheduler.shutdown(wait=True)
+    shutdown_event = asyncio.Event()
     
+    def handle_signal(signum, frame):
+        logger.info("Received signal %d, shutting down...", signum)
+        shutdown_event.set()
+    
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    try:
+        # Perform initial fetch immediately
+        logger.info("Performing initial fetch...")
+        await fetch_all_channels(client, pool, reader_config, channels, tag_filters)
+        
+        # Continuous polling loop
+        logger.info("Starting continuous polling loop (interval: %ds)", poll_interval)
+        while not shutdown_event.is_set():
+            try:
+                # Sleep until next poll or shutdown signal
+                await asyncio.wait_for(shutdown_event.wait(), timeout=poll_interval)
+                # If we get here, shutdown was requested
+                logger.info("Shutdown signal received")
+                break
+            except asyncio.TimeoutError:
+                # Timeout means it's time to fetch again
+                try:
+                    await fetch_all_channels(client, pool, reader_config, channels, tag_filters)
+                except Exception:
+                    logger.exception("Error in fetch cycle (will retry)")
+                    # Continue polling even on error
+            
     finally:
         logger.info("Closing database pool...")
         await pool.close()
