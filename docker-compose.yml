@@ -44,7 +44,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    user: "1000:1000"  # Run as non-privileged user (tg-digest inside container)
+    user: "1001:1001"  # Run as non-privileged user (tg-digest inside container)
     environment:
       APP_ENV: prod
       POSTGRES_DB: tg_digest
@@ -77,7 +77,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    user: "1000:1000"  # Run as non-privileged user
+    user: "1001:1001"  # Run as non-privileged user
     environment:
       APP_ENV: prod
       POSTGRES_DB: tg_digest

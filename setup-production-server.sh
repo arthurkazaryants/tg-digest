@@ -199,9 +199,9 @@ if id "$APP_USER" &>/dev/null; then
     log_warning "User '$APP_USER' already exists (skipping creation)"
 else
     log_info "Creating user '$APP_USER'..."
-    useradd --system --shell /bin/false --home-dir "$APP_HOME" --uid 1000 --gid 1000 "$APP_USER"
+    useradd --system --shell /bin/false --home-dir "$APP_HOME" --uid 1001 --gid 1001 "$APP_USER"
     chown -R "$APP_USER:$APP_GROUP" "$APP_HOME"
-    log_success "User '$APP_USER' created with home directory '$APP_HOME'"
+    log_success "User '$APP_USER' created with home directory '$APP_HOME' (UID: 1001)"
 fi
 
 # Добавляем пользователя в группу docker
