@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ── Named Network для изоляции контейнеров ──────────────────────
 networks:
   tg-digest-net:
