@@ -23,6 +23,7 @@ def read_secret(name: str) -> str:
 async def init_session(session_type: str = "publisher"):
     """
     Initialize Telegram session through interactive login.
+    Session is saved to /tmp/ (writable location in container)
     
     Args:
         session_type: "reader" or "publisher"
@@ -35,7 +36,7 @@ async def init_session(session_type: str = "publisher"):
         sys.exit(1)
     
     session_name = f"tg_{session_type}_session.txt"
-    session_file = Path(f"/run/secrets/{session_name}")
+    session_file = Path(f"/tmp/{session_name}")  # Write to /tmp (writable)
     
     print(f"\n{'='*60}")
     print(f"Initializing Telegram session for {session_type.upper()}")
@@ -48,7 +49,13 @@ async def init_session(session_type: str = "publisher"):
         await client.start()
         print(f"\n✓ Session created successfully!")
         print(f"✓ Session file: {session_file}")
-        print(f"✓ You can now start the {session_type} service\n")
+        print(f"\n📋 NEXT STEPS:")
+        print(f"  1. Copy session file from container to host secrets:")
+        print(f"     docker compose cp tg-digest-publisher-run-XXXXXXXXX:/tmp/{session_name} ./tg-digest-secrets/{session_name}")
+        print(f"  2. Or manually from container:")
+        print(f"     docker compose exec publisher cat /tmp/{session_name} > ./tg-digest-secrets/{session_name}")
+        print(f"  3. Then start the {session_type} service:")
+        print(f"     docker compose up -d {session_type}\n")
     finally:
         await client.disconnect()
 
