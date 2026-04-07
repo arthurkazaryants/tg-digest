@@ -204,27 +204,27 @@ publisher:
 
 ```bash
 # Построить образ
-docker-compose build reader
+docker compose build reader
 
 # Запустить с логами
-docker-compose up reader
+docker compose up reader
 
 # Запустить в фоне
-docker-compose up -d reader
-docker-compose logs -f reader
+docker compose up -d reader
+docker compose logs -f reader
 ```
 
 ### Запуск с DEBUG логированием
 
 ```bash
-docker-compose run -e DEBUG=true reader
+docker compose run -e DEBUG=true reader
 ```
 
 ### Проверка БД
 
 ```bash
 # Подключиться к PostgreSQL
-docker-compose exec postgres psql -U tg_digest -d tg_digest
+docker compose exec postgres psql -U tg_digest -d tg_digest
 
 # Посмотреть загруженные посты
 SELECT channel, COUNT(*) as count 
@@ -241,10 +241,10 @@ LIMIT 5;
 ### Остановка
 
 ```bash
-docker-compose down
+docker compose down
 
 # Удалить БД (очистить данные)
-docker-compose down -v
+docker compose down -v
 ```
 
 ## 🔧 Production развёртывание
@@ -284,7 +284,7 @@ sudo -u tg-digest vi /opt/tg-digest-secrets/tg_api_hash.txt      # ← из my.t
 
 # 2. Переключиться на пользователя tg-digest (рекомендуется)
 sudo -u tg-digest bash
-# Теперь все команды docker-compose выполняются БЕЗ sudo
+# Теперь все команды docker compose выполняются БЕЗ sudo
 
 # 3. Клонировать репо и настроить проект
 cd /opt/tg-digest
@@ -293,19 +293,19 @@ vi config/config.yml
 vi docker-compose.yml
 
 # 4. Запустить reader
-docker-compose build reader
-docker-compose up -d reader
+docker compose build reader
+docker compose up -d reader
 
 # 5. Проверить логи
-docker-compose logs -f reader
+docker compose logs -f reader
 
 # 6. После успешного старта, проверить БД
-docker-compose exec postgres psql -U tg_digest -d tg_digest -c "SELECT COUNT(*) FROM raw_posts;"
+docker compose exec postgres psql -U tg_digest -d tg_digest -c "SELECT COUNT(*) FROM raw_posts;"
 ```
 
 **Или выполнять команды без переключения пользователя:**
 ```bash
-sudo -u tg-digest docker-compose -f /opt/tg-digest/docker-compose.yml logs -f reader
+sudo -u tg-digest docker compose -f /opt/tg-digest/docker-compose.yml logs -f reader
 ```
 
 ### Советы по безопасности на сервере
@@ -313,7 +313,7 @@ sudo -u tg-digest docker-compose -f /opt/tg-digest/docker-compose.yml logs -f re
 **Структура пользователей и прав:**
 ```
 root                   — только для системных операций
-tg-digest (docker)     — все docker-compose операции
+tg-digest (docker)     — все docker compose операции
 ```
 
 **PostgreSQL пароль:**
@@ -325,19 +325,19 @@ openssl rand -base64 32
 **Бэкап БД (в cron, от пользователя tg-digest):**
 ```bash
 # Добавь в crontab (sudo -u tg-digest crontab -e)
-0 2 * * * cd /opt/tg-digest && docker-compose exec -T postgres pg_dump -U tg_digest tg_digest > /backups/tg_digest_$(date +\%Y\%m\%d).sql
+0 2 * * * cd /opt/tg-digest && docker compose exec -T postgres pg_dump -U tg_digest tg_digest > /backups/tg_digest_$(date +\%Y\%m\%d).sql
 ```
 
 **Мониторинг логов:**
 ```bash
 # Уведомления при ошибках в логах
-sudo -u tg-digest docker-compose -f /opt/tg-digest/docker-compose.yml logs reader | grep -i error | mail -s "TG-Digest Error" admin@example.com
+sudo -u tg-digest docker compose -f /opt/tg-digest/docker-compose.yml logs reader | grep -i error | mail -s "TG-Digest Error" admin@example.com
 ```
 
 **Обновление Docker образов (еженедельно):**
 ```bash
 # Добавь в crontab (от пользователя tg-digest)
-0 3 * * 0 cd /opt/tg-digest && docker-compose pull && docker-compose up -d
+0 3 * * 0 cd /opt/tg-digest && docker compose pull && docker compose up -d
 ```
 
 **Запреты для безопасности:**
@@ -354,21 +354,21 @@ ls -la /var/lib/tg-digest           # нет стандартного окруж
 
 ```bash
 # Проверить статус всех сервисов
-docker-compose ps
+docker compose ps
 
 # Проверить логи Reader на ошибки
-docker-compose logs reader | grep -i error
+docker compose logs reader | grep -i error
 
 # Проверить логи Publisher на ошибки
-docker-compose logs publisher | grep -i error
+docker compose logs publisher | grep -i error
 
 # Проверить очередь постов (сколько ждут публикации)
-docker-compose exec postgres psql -U tg_digest -d tg_digest -c "
+docker compose exec postgres psql -U tg_digest -d tg_digest -c "
   SELECT COUNT(*) as unpublished FROM raw_posts WHERE published = false;
 "
 
 # Проверить последние опубликованные посты
-docker-compose exec postgres psql -U tg_digest -d tg_digest -c "
+docker compose exec postgres psql -U tg_digest -d tg_digest -c "
   SELECT channel, COUNT(*) as published FROM raw_posts 
   WHERE published = true 
   GROUP BY channel 
