@@ -23,7 +23,8 @@ def read_secret(name: str) -> str:
 async def init_session(session_type: str = "reader"):
     """
     Initialize Telegram session through interactive login.
-    Session is saved to /tmp/ (writable location in container)
+    Session content is output to stdout for piping to file.
+    All status messages go to stderr.
     
     Args:
         session_type: "reader" or "publisher"
@@ -32,30 +33,29 @@ async def init_session(session_type: str = "reader"):
         api_id = int(read_secret("tg_api_id"))
         api_hash = read_secret("tg_api_hash")
     except FileNotFoundError as e:
-        print(f"ERROR: {e}")
+        print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
     
     session_name = f"tg_{session_type}_session.txt"
     session_file = Path(f"/tmp/{session_name}")  # Write to /tmp (writable)
     
-    print(f"\n{'='*60}")
-    print(f"Initializing Telegram session for {session_type.upper()}")
-    print(f"Session will be saved to: {session_file}")
-    print(f"{'='*60}\n")
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"Initializing Telegram session for {session_type.upper()}", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
     
     client = TelegramClient(str(session_file), api_id, api_hash)
     
     try:
         await client.start()
-        print(f"\n✓ Session created successfully!")
-        print(f"✓ Session file: {session_file}")
-        print(f"\n📋 NEXT STEPS:")
-        print(f"  1. Copy session file from container to host secrets:")
-        print(f"     docker compose cp tg-digest-reader-run-XXXXXXXXX:/tmp/{session_name} ./tg-digest-secrets/{session_name}")
-        print(f"  2. Or manually from container:")
-        print(f"     docker compose exec reader cat /tmp/{session_name} > ./tg-digest-secrets/{session_name}")
-        print(f"  3. Then start the {session_type} service:")
-        print(f"     docker compose up -d {session_type}\n")
+        print(f"✓ Session created successfully!", file=sys.stderr)
+        
+        # Read session content and output to stdout
+        with open(session_file, "r") as f:
+            session_content = f.read()
+        print(session_content)
+        
+        print(f"\n✓ Session saved and piped to stdout", file=sys.stderr)
+        print(f"✓ Use: docker compose run --rm {session_type} python init_session.py {session_type} > ./tg-digest-secrets/{session_name}\n", file=sys.stderr)
     finally:
         await client.disconnect()
 
