@@ -277,29 +277,32 @@ ssh root@your-server "bash /tmp/setup-production-server.sh"
 **Все операции выполняются от пользователя `tg-digest` (не от root!):**
 
 ```bash
-# 1. Обновить secrets реальными значениями
+# 1. Создать .env файл из шаблона
+cp /opt/tg-digest/.env.example /opt/tg-digest/.env
+
+# 2. Обновить secrets реальными значениями
 sudo -u tg-digest vi /opt/tg-digest-secrets/pg_password.txt       # ← сгенерируй сильный пароль
 sudo -u tg-digest vi /opt/tg-digest-secrets/tg_api_id.txt        # ← из my.telegram.org
 sudo -u tg-digest vi /opt/tg-digest-secrets/tg_api_hash.txt      # ← из my.telegram.org
 
-# 2. Переключиться на пользователя tg-digest (рекомендуется)
+# 3. Переключиться на пользователя tg-digest (рекомендуется)
 sudo -u tg-digest bash
 # Теперь все команды docker compose выполняются БЕЗ sudo
 
-# 3. Клонировать репо и настроить проект
+# 4. Клонировать репо и настроить проект
 cd /opt/tg-digest
 git clone <your-repo-url> .
 vi config/config.yml
 vi docker-compose.yml
 
-# 4. Запустить reader
+# 5. Запустить reader
 docker compose build reader
 docker compose up -d reader
 
-# 5. Проверить логи
+# 6. Проверить логи
 docker compose logs -f reader
 
-# 6. После успешного старта, проверить БД
+# 7. После успешного старта, проверить БД
 docker compose exec postgres psql -U tg_digest -d tg_digest -c "SELECT COUNT(*) FROM raw_posts;"
 ```
 
@@ -507,8 +510,8 @@ async with pool.acquire() as conn:  # ← переиспользуем или б
 ### Connection refused
 Проверь что postgres контейнер запущен:
 ```bash
-docker-compose logs postgres
-docker-compose ps
+docker compose logs postgres
+docker compose ps
 ```
 
 ### Memory issues
