@@ -15,6 +15,7 @@ import asyncpg
 import yaml
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+from telethon.types import PeerChannel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("reader")
@@ -310,8 +311,39 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
     try:
         entity = await client.get_entity(channel_name)
     except Exception as e:
-        logger.error("Failed to get entity for channel %s: %s. Skipping this channel.", channel_name, e)
-        return
+        # Fallback для приватных каналов: поищи в диалогах
+        logger.debug("Failed to get entity directly, searching in dialogs for %s", channel_name)
+        try:
+            entity = None
+            channel_id_int = None
+            
+            # Попытка преобразования в int для сравнения
+            try:
+                channel_id_int = int(channel_name)
+            except ValueError:
+                pass
+            
+            # Поиск в диалогах пользователя
+            async for dialog in client.iter_dialogs():
+                dialog_id = dialog.entity.id
+                # Сравниваем по ID (обработка как приватного канала)
+                if channel_id_int and dialog_id == channel_id_int:
+                    entity = dialog.entity
+                    break
+                # Для приватных супергрупп ID может быть отрицательным
+                if channel_id_int and dialog_id == -channel_id_int:
+                    entity = dialog.entity
+                    break
+                # Сравниваем как строки
+                if str(dialog_id) == channel_name or str(dialog_id).lstrip('-') == channel_name.lstrip('-'):
+                    entity = dialog.entity
+                    break
+            
+            if not entity:
+                raise ValueError(f"Channel {channel_name} not found in user dialogs")
+        except Exception as e2:
+            logger.error("Failed to get entity for channel %s: %s. Skipping this channel.", channel_name, e2)
+            return
     
     limit = channel.get("limit", 50)
     tags = channel.get("tags", [])
