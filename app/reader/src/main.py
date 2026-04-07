@@ -304,7 +304,7 @@ async def init_db(pool: asyncpg.Pool):
 async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dict, tag_filters: dict):
     """Загружает и фильтрует сообщения из канала (только новые после последней синхронизации)."""
     start_time = time.time()
-    channel_name = channel["username"]
+    channel_name = str(channel["username"])  # Ensure it's a string for SQL queries
     
     # Пытаемся получить сущность канала с обработкой ошибок
     try:
