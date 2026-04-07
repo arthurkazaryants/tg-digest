@@ -1,7 +1,9 @@
 FROM python:3.12-slim
 
-# Create non-privileged user for security (defense-in-depth)
-RUN useradd --system --shell /bin/false --home-dir /nonexistent --uid 1000 --gid 1000 tg-digest || true
+# Create non-privileged user for security
+# Note: This user exists ONLY inside the container
+RUN groupadd --system --gid 1001 tg-digest && \
+    useradd --system --gid tg-digest --shell /bin/false --home-dir /nonexistent --uid 1001 tg-digest
 
 WORKDIR /app
 
