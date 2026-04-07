@@ -289,7 +289,7 @@ sudo -u tg-digest bash
 # 3. Клонировать репо и настроить проект
 cd /opt/tg-digest
 git clone <your-repo-url> .
-vi config/channels.yml
+vi config/config.yml
 vi docker-compose.yml
 
 # 4. Запустить reader
