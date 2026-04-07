@@ -1,10 +1,7 @@
 FROM python:3.12-slim
 
-# Create non-privileged user with proper home directory
-RUN mkdir -p /home/tg-digest && \
-    useradd --system --shell /bin/false --home-dir /home/tg-digest --uid 1000 --gid 1000 tg-digest || true && \
-    chown -R tg-digest:tg-digest /home/tg-digest && \
-    chmod 700 /home/tg-digest
+# Create non-privileged user for security (defense-in-depth)
+RUN useradd --system --shell /bin/false --home-dir /nonexistent --uid 1000 --gid 1000 tg-digest || true
 
 WORKDIR /app
 

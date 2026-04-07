@@ -181,16 +181,27 @@ echo -e "${BLUE}═════════════════════�
 
 APP_USER="${APP_USER:-tg-digest}"
 APP_GROUP="${APP_GROUP:-tg-digest}"
+APP_HOME="${APP_HOME:-/var/lib/tg-digest}"
 
 log_info "Application user: $APP_USER (system user, no login shell)"
+log_info "Application home: $APP_HOME"
+
+# Создаём домашнюю папку
+if [ ! -d "$APP_HOME" ]; then
+    log_info "Creating home directory: $APP_HOME..."
+    mkdir -p "$APP_HOME"
+    chmod 700 "$APP_HOME"
+    log_success "Home directory created"
+fi
 
 # Проверяем, существует ли уже пользователь
 if id "$APP_USER" &>/dev/null; then
     log_warning "User '$APP_USER' already exists (skipping creation)"
 else
     log_info "Creating user '$APP_USER'..."
-    useradd --system --shell /bin/false --home-dir /nonexistent $APP_USER
-    log_success "User '$APP_USER' created"
+    useradd --system --shell /bin/false --home-dir "$APP_HOME" --uid 1000 --gid 1000 "$APP_USER"
+    chown -R "$APP_USER:$APP_GROUP" "$APP_HOME"
+    log_success "User '$APP_USER' created with home directory '$APP_HOME'"
 fi
 
 # Добавляем пользователя в группу docker
