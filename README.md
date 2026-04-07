@@ -283,7 +283,7 @@ sudo -u tg-digest vi /opt/tg-digest-secrets/tg_api_id.txt        # ← из my.t
 sudo -u tg-digest vi /opt/tg-digest-secrets/tg_api_hash.txt      # ← из my.telegram.org
 
 # 2. Переключиться на пользователя tg-digest (рекомендуется)
-sudo -u tg-digest -i
+sudo -u tg-digest bash
 # Теперь все команды docker-compose выполняются БЕЗ sudo
 
 # 3. Клонировать репо и настроить проект
