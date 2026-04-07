@@ -181,7 +181,7 @@ echo -e "${BLUE}═════════════════════�
 
 APP_USER="${APP_USER:-tg-digest}"
 APP_GROUP="${APP_GROUP:-tg-digest}"
-APP_HOME="${APP_HOME:-/var/lib/tg-digest}"
+APP_HOME="${APP_HOME:-/home/tg-digest}"
 
 log_info "Application user: $APP_USER (system user, no login shell)"
 log_info "Application home: $APP_HOME"
