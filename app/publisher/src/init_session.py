@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 
 def read_secret(name: str) -> str:
@@ -37,22 +38,21 @@ async def init_session(session_type: str = "publisher"):
         sys.exit(1)
     
     session_name = f"tg_{session_type}_session.txt"
-    session_file = Path(f"/tmp/{session_name}")  # Write to /tmp (writable)
     
     print(f"\n{'='*60}", file=sys.stderr)
     print(f"Initializing Telegram session for {session_type.upper()}", file=sys.stderr)
     print(f"{'='*60}\n", file=sys.stderr)
     
-    client = TelegramClient(str(session_file), api_id, api_hash)
+    # Use StringSession to get the session string
+    client = TelegramClient(StringSession(), api_id, api_hash)
     
     try:
         await client.start()
         print(f"✓ Session created successfully!", file=sys.stderr)
         
-        # Read session content and output to stdout
-        with open(session_file, "r") as f:
-            session_content = f.read()
-        print(session_content)
+        # Get session string and output to stdout
+        session_string = client.session.save()
+        print(session_string)
         
         print(f"\n✓ Session saved and piped to stdout", file=sys.stderr)
         print(f"✓ Use: docker compose run --rm {session_type} python init_session.py {session_type} > ./tg-digest-secrets/{session_name}\n", file=sys.stderr)
