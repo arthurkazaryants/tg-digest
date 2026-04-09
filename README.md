@@ -220,6 +220,21 @@ docker compose logs -f reader
 docker compose run -e DEBUG=true reader
 ```
 
+**Что включает `DEBUG=true`:**
+- Логирование всех доступных Telegram каналов и их ID при подключении reader
+- Полезно для поиска ID каналов, которые нет в публичном доступе
+- После нахождения нужного ID, скопируй его из логов и добавь в `config/config.yml`
+
+**Пример логов при DEBUG=true:**
+```
+=== Available channels in user dialogs ===
+  ID:      2050754104 | Alt: -100 50754104 | Title: Мир it вакансий
+  ID:      1451234567 | Alt: -100451234567 | Title: My Private Channel
+...
+Total dialogs found: 42
+=== End of channels list ===
+```
+
 ### Проверка БД
 
 ```bash
