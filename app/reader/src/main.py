@@ -468,6 +468,17 @@ async def main():
     logger.info("Connecting to Telegram...")
     await client.start()
     logger.info("✓ Successfully connected to Telegram")
+    
+    # Debug: Log all available dialogs with their IDs
+    logger.info("=== Available channels in user dialogs ===")
+    dialog_count = 0
+    async for dialog in client.iter_dialogs(limit=200):
+        entity = dialog.entity
+        if hasattr(entity, 'title'):
+            dialog_count += 1
+            logger.info(f"  ID: {entity.id:15} | Alt: -100{abs(entity.id)%1000000000:9} | Title: {entity.title}")
+    logger.info(f"Total dialogs found: {dialog_count}")
+    logger.info("=== End of channels list ===")
 
     pool = await get_db_pool()
     await init_db(pool)
