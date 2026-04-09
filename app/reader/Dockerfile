@@ -11,6 +11,7 @@ COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ .
+COPY healthcheck.py .
 
 # Set proper permissions
 RUN chown -R tg-digest:tg-digest /app
