@@ -41,7 +41,46 @@ reader:
 # tags      — категории для связи с tag_filters
 
 channels:
-  - username: remote_it_jobs
+  - username: g_jobbot
+    limit: 40
+    tags: [jobs]
+  - username: jobfortm
+    limit: 40
+    tags: [jobs]
+  - username: vacancyCRC
+    limit: 40
+    tags: [jobs]
+  - username: jtbl_vacancy
+    limit: 40
+    tags: [jobs]
+  - username: "2050754104"
+    limit: 40
+    tags: [jobs]
+  - username: workfortop
+    limit: 40
+    tags: [jobs]
+  - username: workfortop_pro
+    limit: 40
+    tags: [jobs]
+  - username: toplevel_job
+    limit: 40
+    tags: [jobs]
+  - username: top_proit
+    limit: 40
+    tags: [jobs]
+  - username: forchiefs
+    limit: 40
+    tags: [jobs]
+  - username: jobGeeks
+    limit: 40
+    tags: [jobs]
+  - username: sparklesjobs
+    limit: 40
+    tags: [jobs]
+  - username: c_level_top
+    limit: 40
+    tags: [jobs]
+  - username: it_vacancy_relocation
     limit: 40
     tags: [jobs]
 
@@ -67,40 +106,54 @@ tag_filters:
   jobs:
     include_keywords:
       - "cto"
+      - "chief technology officer"
+      - "chief technical officer"
+      - "technical director"
+      - "сто"
+      - "технический директор"
+      - "chief information officer"
       - "cio"
       - "it director"
-      - "head of infrastructure"
-      - "director of engineering"
-      - "technical director"
-      - "head of engineering"
-      - "head of it"
-      - "vp engineering"
-      - "vp technology"
-      - "director of engineering"
-      - "chief digital officer"
-      - "engineering director"
-      - "технический директор"
       - "ит-директор"
+      - "руководитель it"
+      - "ит директор"
       - "директор по информационным технологиям"
+      - "директора по информационным технологиям"
       - "директор департамента ит"
       - "руководитель it-департамента"
+      - "head of it"
       - "руководитель it-инфраструктуры"
-      - "директор по цифровой трансформации"
+      - "head of infrastructure"
+      - "director of infrastructure"
+      - "vp engineering"
+      - "director of engineering"
+      - "engineering director"
       - "head of engineering"
       - "vp engineering"
-      - "highload"
-      - "architecture"
-      - "fintech"
-      - "payments"
-      - "transport"
+      - "vp technology"
+      - "chief digital officer"
+      - "директор по цифровой трансформации"
       # - "*"  # Раскомментируйте для тестирования
     
     exclude_keywords:
       - "junior"
       - "intern"
       - "стажер"
+      - "ИЩУ РАБОТОДАТЕЛЯ"
       - "sales"
       - "designer"
+      - "#кандидат"
+      - "HRD"
+      - "HRBP"
+      - "CISO"
+      - "Director of Product"
+      - "Marketing"
+      - "Team Lead IOS"
+      - "Tech Lead"
+      - "Head of Marketing"
+      - "Product Director"
+      - "Engineer"
+      - "Developer"
     
     location_preferences:
       - "*"
@@ -127,6 +180,7 @@ tag_filters:
   #   exclude_keywords: []
 
 
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Примеры подклассификации (на будущее)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -148,12 +202,6 @@ tag_filters:
 #     keywords: ["architecture", "ddd", "microservices", "event-driven", "distributed systems"]
 #   - name: "Management"
 #     keywords: ["leadership", "management", "team", "process", "agile", "scrum", "kanban"]
-#   - name: "Performance"
-#     keywords: ["optimization", "performance", "benchmark", "profiling", "scaling"]
-#   - name: "Testing"
-#     keywords: ["testing", "unit test", "integration test", "e2e", "tdd", "bdd"]
-#   - name: "DevTools"
-#     keywords: ["git", "ci/cd", "github", "gitlab", "jenkins", "docker", "kubernetes"]
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -225,7 +273,7 @@ publisher:
   sources:
     jobs:
       enabled: true
-      target_channel: "@my_digest_channel"   # Куда публиковать
+      target_channel: "-1003328023126"   # Куда публиковать
       batch_limit: 10                         # Макс постов за раз
       # format: "compact"  # На будущее: compact/full/summary
     # news:

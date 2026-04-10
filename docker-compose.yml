@@ -64,7 +64,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # ── Publisher — публикует посты в Telegram канал ───────────────
+  # ── Publisher — публикует посты в Telegram канал (через Bot API) ───────────────
   publisher:
     build: ./app/publisher
     container_name: tg_digest_publisher
@@ -84,9 +84,7 @@ services:
       DB_PORT: 5432
       CONFIG: /app/config/config.yml
     secrets:
-      - tg_api_id
-      - tg_api_hash
-      - tg_publisher_session
+      - tg_bot_token
       - pg_password
     volumes:
       - ./config:/app/config:ro
@@ -137,6 +135,8 @@ secrets:
     file: ../tg-digest-secrets/tg_api_id.txt
   tg_api_hash:
     file: ../tg-digest-secrets/tg_api_hash.txt
+  tg_bot_token:
+    file: ../tg-digest-secrets/tg_bot_token.txt
   tg_reader_session:
     file: ../tg-digest-secrets/tg_reader_session.txt
   tg_publisher_session:

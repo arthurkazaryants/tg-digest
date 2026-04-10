@@ -1,13 +1,17 @@
 """
 Publisher — периодически читает неопубликованные посты из БД 
-и отправляет их в Telegram-канал.
+и отправляет их в Telegram-канал через Bot API.
 
 Две стратегии публикации:
 1. Плановая: по расписанию (из config) отправляет до N сообщений
 2. Срочная: если очередь переполнена (> queue_threshold), публикует сразу
 
 Архитектура:
-  raw_posts[published=false] → format → send to Telegram → mark published=true
+  raw_posts[published=false] → format → send to Telegram via Bot → mark published=true
+
+ВАЖНО: Используется Bot API (python-telegram-bot), а не Telethon.
+Это позволяет получать уведомления на личном аккаунте пользователя,
+т.к. сообщения отправляются от бота, а не от личной учетной записи.
 """
 
 import asyncio
@@ -20,8 +24,8 @@ from pathlib import Path
 import asyncpg
 import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from telethon import TelegramClient
-from telethon.sessions import StringSession
+from telegram import Bot
+from telegram.error import TelegramError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("publisher")
@@ -280,10 +284,10 @@ def parse_cron(cron_str: str) -> dict:
     }
 
 
-async def publish_batch(client: TelegramClient, pool: asyncpg.Pool, config: dict):
+async def publish_batch(bot: Bot, pool: asyncpg.Pool, config: dict):
     """Основная логика публикации: читаем → форматируем → отправляем → отмечаем.
     
-    Отправляет все неопубликованные посты для первого enabled источника.
+    Отправляет все неопубликованные посты для первого enabled источника через Bot API.
     """
     start_time = time.time()
     
@@ -315,9 +319,9 @@ async def publish_batch(client: TelegramClient, pool: asyncpg.Pool, config: dict
     
     for post in posts:
         try:
-            # Форматируем и отправляем
+            # Форматируем и отправляем через Bot API
             message = format_post(post)
-            await client.send_message(target_channel, message, parse_mode='markdown')
+            await bot.send_message(chat_id=target_channel, text=message)
             
             # Отмечаем как опубликованное
             await mark_as_published(pool, post["id"])
@@ -325,26 +329,28 @@ async def publish_batch(client: TelegramClient, pool: asyncpg.Pool, config: dict
             
             logger.debug(f"✓ Post {post['id']} from @{post['channel']} published")
             
+        except TelegramError as e:
+            failed_count += 1
+            logger.error(f"Telegram error publishing post {post['id']}: {e}")
         except Exception as e:
             failed_count += 1
             logger.error(f"Failed to publish post {post['id']}: {e}")
-            # Продолжаем со следующего поста
     
     elapsed = time.time() - start_time
     logger.info(f"✓ Publishing completed: {sent_count} sent, {failed_count} failed in {elapsed:.2f}s")
 
 
-async def check_queue_and_publish_if_overflow(client: TelegramClient, pool: asyncpg.Pool, config: dict):
+async def check_queue_and_publish_if_overflow(bot: Bot, pool: asyncpg.Pool, config: dict):
     """Проверяет размер очереди. Если > queue_threshold, публикует сразу.
     
     Это предотвращает накопление постов и спам одного большого выброса.
     """
-    queue_threshold = config.get('queue_threshold', 20)
+    queue_threshold = config.get('queue_threshold', DEFAULT_QUEUE_THRESHOLD)
     count = await get_unpublished_count(pool)
     
     if count >= queue_threshold:
         logger.warning(f"Queue overflow detected: {count} unpublished posts (threshold={queue_threshold}). Publishing early!")
-        await publish_batch(client, pool, config)
+        await publish_batch(bot, pool, config)
     else:
         logger.debug(f"Queue status: {count}/{queue_threshold} posts")
 
@@ -352,7 +358,7 @@ async def check_queue_and_publish_if_overflow(client: TelegramClient, pool: asyn
 async def main():
     logger.info("Starting publisher service...")
     
-    # Загрузка конфига (проверка синтаксиса и валидность структуры)
+    # Загрузка конфика (проверка синтаксиса и валидность структуры)
     logger.info("Loading configuration...")
     try:
         publisher_config = load_publisher_config()
@@ -363,7 +369,7 @@ async def main():
     
     # Проверка необходимых secrets
     logger.info("Verifying secrets...")
-    required_secrets = ["tg_api_id", "tg_api_hash", "tg_publisher_session", "pg_password"]
+    required_secrets = ["tg_bot_token", "pg_password"]
     for secret_name in required_secrets:
         try:
             read_secret(secret_name)
@@ -374,30 +380,24 @@ async def main():
     
     logger.info("All secrets verified successfully")
     
-    # Подключение к Telegram
-    api_id = int(read_secret("tg_api_id"))
-    api_hash = read_secret("tg_api_hash")
-    session_str = read_secret("tg_publisher_session")
+    # Создание Bot клиента через Bot API
+    bot_token = read_secret("tg_bot_token")
+    bot = Bot(token=bot_token)
     
-    # Создаём клиент с сохранённой сессией
-    if not session_str or not session_str.strip():
-        logger.warning("Empty session string - will require new Telegram authentication")
-        session = StringSession()
-    else:
-        session = StringSession(session_str)
-    
-    client = TelegramClient(session, api_id, api_hash)
-    
-    logger.info("Connecting to Telegram...")
-    await client.start()
-    logger.info("✓ Successfully connected to Telegram")
+    logger.info("Verifying bot token...")
+    try:
+        bot_info = await bot.get_me()
+        logger.info(f"✓ Successfully connected to Telegram Bot: @{bot_info.username}")
+    except TelegramError as e:
+        logger.critical(f"Failed to verify bot token: {e}")
+        raise SystemExit(1) from e
     
     pool = await get_db_pool()
     
     try:
-        # Параметры из конфига
-        schedule = publisher_config.get('schedule', '0 */1 * * *')
-        queue_check_interval = publisher_config.get('queue_check_interval', 300)
+        # Параметры из конфика
+        schedule = publisher_config.get('schedule', DEFAULT_SCHEDULE)
+        queue_check_interval = publisher_config.get('queue_check_interval', DEFAULT_QUEUE_CHECK_INTERVAL)
         sources = publisher_config.get('sources', {})
         enabled_sources = {k: v for k, v in sources.items() if v.get('enabled', False)}
         
@@ -408,12 +408,12 @@ async def main():
         
         scheduler = AsyncIOScheduler()
         
-        # Job 1: Плановая публикация по расписанию из конфига
+        # Job 1: Плановая публикация по расписанию из конфика
         scheduler.add_job(
             publish_batch,
             "cron",
             **parse_cron(schedule),
-            args=(client, pool, publisher_config),
+            args=(bot, pool, publisher_config),
             id="scheduled_publish",
         )
         
@@ -422,15 +422,15 @@ async def main():
             check_queue_and_publish_if_overflow,
             "interval",
             seconds=queue_check_interval,
-            args=(client, pool, publisher_config),
+            args=(bot, pool, publisher_config),
             id="queue_monitor",
         )
         
         scheduler.start()
         
         # Выполнить первую проверку сразу
-        await check_queue_and_publish_if_overflow(client, pool, publisher_config)
-        await publish_batch(client, pool, publisher_config)
+        await check_queue_and_publish_if_overflow(bot, pool, publisher_config)
+        await publish_batch(bot, pool, publisher_config)
         
         # Ждём сигнала завершения
         shutdown_event = asyncio.Event()
@@ -454,8 +454,8 @@ async def main():
         logger.info("Closing database pool...")
         await pool.close()
         
-        logger.info("Disconnecting from Telegram...")
-        await client.disconnect()
+        logger.info("Closing bot session...")
+        await bot.session.close()
         
         logger.info("Publisher finished")
 
