@@ -153,6 +153,9 @@ tag_filters:
       - "Product Director"
       - "Engineer"
       - "Developer"
+      - "System Analyst"
+      - "Scrum Master"
+      
     
     location_preferences:
       - "*"
