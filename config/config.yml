@@ -273,7 +273,7 @@ publisher:
   sources:
     jobs:
       enabled: true
-      target_channel: "-1003328023126"   # Куда публиковать
+      target_channel: -1003328023126   # Куда публиковать
       batch_limit: 10                         # Макс постов за раз
       # format: "compact"  # На будущее: compact/full/summary
     # news:
