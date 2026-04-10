@@ -119,11 +119,6 @@ services:
   #   volumes:
   #     #- ./config/prompts:/app/config/prompts:ro
   #     - ./config:/app/config:ro
-  #   secrets:
-  #     - tg_api_id
-  #     - tg_api_hash
-  #     - tg_publisher_session
-  #     - pg_password
 
 # ── Secrets (Docker Secrets из файлов) ────────────────────
 secrets:
