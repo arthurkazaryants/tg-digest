@@ -305,11 +305,14 @@ create_secret_file "tg_api_id.txt" "YOUR_TELEGRAM_API_ID_FROM_MY_TELEGRAM_ORG"
 # tg_api_hash
 create_secret_file "tg_api_hash.txt" "YOUR_TELEGRAM_API_HASH_FROM_MY_TELEGRAM_ORG"
 
-# tg_reader_session (будет создана автоматически при первом запуске)
+# tg_reader_session (будет создана автоматически при первом запуске reader)
 create_secret_file "tg_reader_session.txt" ""
 
-# tg_publisher_session (будет создана автоматически для publisher)
-create_secret_file "tg_publisher_session.txt" ""
+# tg_bot_token (для publisher, получить из @BotFather)
+create_secret_file "tg_bot_token.txt" "YOUR_TELEGRAM_BOT_TOKEN_FROM_BOTFATHER"
+
+# tg_publisher_session (устаревшее, больше не используется - publisher использует Bot API теперь)
+# create_secret_file "tg_publisher_session.txt" ""
 
 # llm_api_key (для будущего engine)
 create_secret_file "llm_api_key.txt" "sk-YOUR_LLM_API_KEY_HERE"
