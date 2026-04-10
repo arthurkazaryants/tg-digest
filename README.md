@@ -8,8 +8,9 @@
   - Сохраняет отфильтрованный контент в PostgreSQL
   
 - **Publisher** ✅ — Автоматическая публикация дайджестов (каждый час + overflow monitoring)
-  - Батчит посты из БД в тематические дайджесты
-  - Публикует в целевые Telegram-каналы
+  - Читает неопубликованные посты из БД
+  - Публикует в целевой Telegram-канал через Bot API
+  - Отправляет от бота (а не от личного аккаунта) → получаешь уведомления
   - Мониторит очередь и публикует при переполнении
   
 - **Engine** ⏸️ — Зарезервировано для LLM обработки (когда потребуется)
@@ -41,12 +42,14 @@
 ├── pg_password.txt          # пароль PostgreSQL
 ├── tg_api_id.txt            # Telegram API ID
 ├── tg_api_hash.txt          # Telegram API Hash
-├── tg_reader_session.txt    # Telegram сессия reader
-└── tg_publisher_session.txt # Telegram сессия publisher
+├── tg_reader_session.txt    # Telegram сессия reader (личный аккаунт)
+└── tg_bot_token.txt         # Telegram Bot Token (для publisher)
 ```
 
 <details>
-<summary><b>Как получить Telegram API credentials</b></summary>
+<summary><b>Как получить Telegram API credentials и Bot Token</b></summary>
+
+**Telegram API (для Reader):**
 
 1. Перейди на https://my.telegram.org
 2. Phone Number → Enter Your Phone Number  
@@ -54,10 +57,26 @@
 4. Выбери или создай App → скопируй Api ID и Api Hash
 5. Сохрани в `tg_api_id.txt` и `tg_api_hash.txt`
 
-**Сессии Reader и Publisher:**
-- Будут созданы автоматически при первом запуске
-- Хранятся отдельно: `tg_reader_session.txt` и `tg_publisher_session.txt`
-- Это позволяет читать и публиковать от разных аккаунтов (если нужно)
+**Reader Session (автоматически):**
+- Генерируется при первом запуске reader контейнера
+- Хранится в `tg_reader_session.txt`
+- Это сессия вашего личного аккаунта для чтения каналов
+
+**Publisher Bot Token (через @BotFather):**
+
+1. Открой Telegram и найди [@BotFather](https://t.me/botfather)
+2. Отправь `/newbot`
+3. Следуй инструкциям:
+   - Название бота: `My Digest Bot` (или как угодно)
+   - Username: `my_digest_bot` (должен заканчиваться на `_bot`)
+4. Получишь **Bot Token** вида: `1234567890:ABCDEFGHijklmnOPQRSTuvwxyz...`
+5. Сохрани в `tg_bot_token.txt`
+
+**Добавление бота в канал:**
+1. Открой свой канал → Информация (или три точки → Управление каналом)
+2. Администраторы → Добавить администратора
+3. Найди своего бота (по username)
+4. Дай права: ✅ Отправлять сообщения (остальное можно отключить)
 
 </details>
 
