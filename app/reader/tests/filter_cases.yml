@@ -1,0 +1,31 @@
+jobs_filter_cases:
+  should_pass:
+    - |
+      🔝ВАКАНСИЯ: Директор по информационным технологиям (CIO)
+      до 600 000 ₽
+      Обязанности:
+      - Разработка и реализация стратегии развития ИТ-инфраструктуры компании.
+    - |
+      🔝ВАКАНСИЯ: Директор по информационным технологиям/СIO
+      КОМПАНИЯ: 12storeez – магазин одежды и аксессуаров премиум сегмента
+      ЛОКАЦИЯ: Москва
+    - |
+      ИТ-директора в Сбер страхование жизни с командой 200+ человек.
+  should_fail:
+    - |
+      **Director of Social Media**
+      **Tinder** is a popular location-based social discovery and dating app launched in 2012.
+      **Los Angeles, California.**
+    - |
+      brand and one of the most trusted names in journalism.
+      **Remote work. Location: San Francisco Bay Area (must reside locally for regular in-person client meetings and industry events).**
+      [Job description on LinkedIn](https://www.linkedin.com/jobs/view/director-partnerships-san-francisco-at-time-4397362644?trk=public_post_feed-job-posting-content).
+      More details in Jessica Sibley’s [post on LinkedIn](https://www.linkedin.com/posts/jessicasibley_at-time-were-investing-in-growth-and-innovation-activity-7447049712303513600-rMhZ?utm_source=share&utm_medium=member_desktop&rcm=ACoAAClX-tUBKHoUZwCujxq4Qf2VESA4UISoRsg).
+    - |
+      Team Lead команды разработки (System Analyst)
+      Заниматься продуктами Профиля сотрудника и коллеги - сердце продуктов: Как связаться с коллегой, кто он в компании: роль, структура, как проявляет себя в инфополе - социальная сторона. Уведомлениями и пушами всех продуктов в web&app, а так же единым инструментом сбора Обратной связью на внутренние сервисы.
+      Пишите AGGrischenko@alfabank.ru
+    - |
+      Product Owner в Соцсеть
+      Развивать продукты Соцсети - это экосистема внутренних сервисов, которые способствуют укреплению командных связей от сотрудника к сотруднику, такие как Сообщества - клубы по интересам, со своими событиями, общим духом и внутренним миром, Моменты - инстаграм для сотрудников с возможностью поделиться фото или видеомоментом, Открытки - сделать тепло и приятно вне рабочих чатов поможет крафтовый конструктор открыток.
+      Пишите Dmednov@alfabank.ru

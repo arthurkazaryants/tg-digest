@@ -99,7 +99,7 @@ channels:
 # Фильтры по тегам (универсальный механизм)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # include_keywords — ОБЯЗАТЕЛЕН!
-# exclude_keywords, location_preferences, seniority — опциональны
+# exclude_keywords — опционален
 
 tag_filters:
   
@@ -157,22 +157,6 @@ tag_filters:
       - "Scrum Master"
       
     
-    location_preferences:
-      - "*"
-      # - "remote"
-      # - "удаленно"
-      # - "hybrid"
-      # - "москва"
-      # - "санкт-петербург"
-      # - "краснодар"
-      # - "кипр"
-    
-    seniority:
-      - "lead"
-      - "head"
-      - "director"
-      - "principal"
-
   # news:
   #   include_keywords: ["*"]
   #   exclude_keywords: []

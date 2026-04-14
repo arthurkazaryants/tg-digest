@@ -7,6 +7,7 @@ Reader — подключается к Telegram через Telethon,
 import asyncio
 import logging
 import os
+import re
 import signal
 import time
 from pathlib import Path
@@ -155,7 +156,36 @@ def validate_config(config: dict) -> None:
 
 def text_to_lower(text: str) -> str:
     """Приводит текст к нижнему регистру для сравнения."""
-    return text.lower() if text else ""
+    return text.casefold() if text else ""
+
+
+def has_wildcard(keywords: list[str]) -> bool:
+    """Проверяет, содержит ли список wildcard '*'."""
+    return any(kw.strip() == "*" for kw in keywords if isinstance(kw, str))
+
+
+def keyword_in_text(text_lower: str, keyword: str) -> bool:
+    """Проверяет ключевое слово с учетом границ слов/фраз.
+
+    Это защищает от ложных срабатываний вроде 'cio' внутри 'location'.
+    """
+    kw = keyword.casefold().strip()
+    if not kw:
+        return False
+    if kw == "*":
+        return True
+
+    # Разрешаем произвольные пробелы/переносы между словами в фразе.
+    escaped = re.escape(kw)
+    escaped = escaped.replace(r"\ ", r"\s+")
+
+    # Для "словоподобных" ключей используем границы не-слов.
+    # Для прочих символов fallback на подстроку.
+    if re.search(r"[0-9a-zа-яё]", kw, flags=re.IGNORECASE):
+        pattern = rf"(?<!\w){escaped}(?!\w)"
+        return re.search(pattern, text_lower, flags=re.IGNORECASE) is not None
+
+    return kw in text_lower
 
 
 def matches_keywords(text: str, keywords: list[str], match_all: bool = False) -> bool:
@@ -167,7 +197,9 @@ def matches_keywords(text: str, keywords: list[str], match_all: bool = False) ->
     if not keywords:
         return True
     text_lower = text_to_lower(text)
-    matches = [kw.lower() in text_lower for kw in keywords]
+    matches = [keyword_in_text(text_lower, kw) for kw in keywords if isinstance(kw, str)]
+    if not matches:
+        return False
     return all(matches) if match_all else any(matches)
 
 
@@ -191,7 +223,7 @@ def apply_tag_filters(text: str, tag_filter: dict) -> bool:
         raise ValueError("include_keywords is required in tag filter. Use ['*'] to include all messages.")
     
     # Проверяем специальный символ "все сообщения"
-    if include_keywords != ["*"]:
+    if not has_wildcard(include_keywords):
         # Должно быть хотя бы одно ключевое слово включения
         if not matches_keywords(text, include_keywords, match_all=False):
             return False
@@ -199,18 +231,6 @@ def apply_tag_filters(text: str, tag_filter: dict) -> bool:
     # Не должно быть ключевых слов исключения
     exclude_keywords = tag_filter.get("exclude_keywords", [])
     if exclude_keywords and matches_keywords(text, exclude_keywords, match_all=False):
-        return False
-    
-    # Проверяем seniority (если указан в фильтре, требуем совпадение)
-    seniority = tag_filter.get("seniority", [])
-    if seniority and not matches_keywords(text, seniority, match_all=False):
-        logger.debug("Seniority filter failed: no match in text")
-        return False
-    
-    # Проверяем location (если указан в фильтре, требуем совпадение)
-    location_prefs = tag_filter.get("location_preferences", [])
-    if location_prefs and not matches_keywords(text, location_prefs, match_all=False):
-        logger.debug("Location filter failed: no match in text")
         return False
     
     return True
