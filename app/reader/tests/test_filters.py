@@ -82,6 +82,25 @@ class ReaderFilterTests(unittest.TestCase):
         text = "Ищем CTO в продуктовую компанию"
         self.assertTrue(self.reader.should_save_post(text, ["other", "jobs"], tag_filters))
 
+    def test_exclude_keyword_combinations_exclude_on_full_match(self):
+        tag_filter = {
+            "include_keywords": ["технический директор"],
+            "exclude_keyword_combinations": [
+                ["технический директор", "пто"],
+                ["технический директор", "технадзор", "ввод объектов в эксплуатацию"],
+            ],
+        }
+
+        # Есть только часть комбинации -> не исключаем
+        self.assertTrue(self.reader.apply_tag_filters("Вакансия: Технический директор без ПТО", tag_filter))
+
+        # Полная комбинация из 2 слов -> исключаем
+        self.assertFalse(self.reader.apply_tag_filters("Технический директор, зона ответственности: ПТО", tag_filter))
+
+        # Полная комбинация из 3 слов -> исключаем
+        text = "Технический директор: технадзор, ПТО и ввод объектов в эксплуатацию."
+        self.assertFalse(self.reader.apply_tag_filters(text, tag_filter))
+
 
 if __name__ == "__main__":
     unittest.main()

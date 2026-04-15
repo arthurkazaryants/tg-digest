@@ -232,6 +232,21 @@ def apply_tag_filters(text: str, tag_filter: dict) -> bool:
     exclude_keywords = tag_filter.get("exclude_keywords", [])
     if exclude_keywords and matches_keywords(text, exclude_keywords, match_all=False):
         return False
+
+    # AND-исключения: если все keywords из комбинации найдены — исключаем пост
+    exclude_combinations = tag_filter.get("exclude_keyword_combinations", [])
+    for combo in exclude_combinations:
+        if not isinstance(combo, list):
+            logger.debug("Skipping invalid exclude_keyword_combinations item (not a list): %r", combo)
+            continue
+
+        combo_keywords = [kw for kw in combo if isinstance(kw, str) and kw.strip()]
+        if not combo_keywords:
+            continue
+
+        if matches_keywords(text, combo_keywords, match_all=True):
+            logger.debug("Post excluded by keyword combination: %s", combo_keywords)
+            return False
     
     return True
 
