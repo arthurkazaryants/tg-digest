@@ -57,14 +57,20 @@ class ReaderFilterTests(unittest.TestCase):
         self.assertGreater(len(pass_cases), 0, "Add at least one pass-case in filter_cases.yml")
         for idx, text in enumerate(pass_cases, start=1):
             with self.subTest(case=f"pass_{idx}"):
-                self.assertTrue(self.reader.apply_tag_filters(text.strip(), self.jobs_filter))
+                self.assertTrue(
+                    self.reader.apply_tag_filters(text.strip(), self.jobs_filter),
+                    msg=f"Pass case {idx} did not match: {text.strip()[:120]!r}"
+                )
 
     def test_jobs_filter_fail_cases(self):
         fail_cases = self.filter_cases.get("jobs_filter_cases", {}).get("should_fail", [])
         self.assertGreater(len(fail_cases), 0, "Add at least one fail-case in filter_cases.yml")
         for idx, text in enumerate(fail_cases, start=1):
             with self.subTest(case=f"fail_{idx}"):
-                self.assertFalse(self.reader.apply_tag_filters(text.strip(), self.jobs_filter))
+                self.assertFalse(
+                    self.reader.apply_tag_filters(text.strip(), self.jobs_filter),
+                    msg=f"Fail case {idx} unexpectedly matched: {text.strip()[:120]!r}"
+                )
 
     def test_exclude_keywords_have_priority(self):
         tag_filter = {
@@ -86,20 +92,26 @@ class ReaderFilterTests(unittest.TestCase):
         tag_filter = {
             "include_keywords": ["технический директор"],
             "exclude_keyword_combinations": [
-                ["технический директор", "пто"],
                 ["технический директор", "технадзор", "ввод объектов в эксплуатацию"],
             ],
         }
 
-        # Есть только часть комбинации -> не исключаем
-        self.assertTrue(self.reader.apply_tag_filters("Вакансия: Технический директор без ПТО", tag_filter))
+        # Текст без полной комбинации ключевых слов должен пройти
+        self.assertTrue(
+            self.reader.apply_tag_filters("Технический директор без ПТО", tag_filter),
+            msg="Expected text without full keyword combination to pass"
+        )
+        self.assertTrue(
+            self.reader.apply_tag_filters("Технический директор, зона ответственности: ПТО", tag_filter),
+            msg="Expected text with partial keywords only to pass"
+        )
 
-        # Полная комбинация из 2 слов -> исключаем
-        self.assertFalse(self.reader.apply_tag_filters("Технический директор, зона ответственности: ПТО", tag_filter))
-
-        # Полная комбинация из 3 слов -> исключаем
+        # Только полная комбинация из 3 слов должна быть исключена
         text = "Технический директор: технадзор, ПТО и ввод объектов в эксплуатацию."
-        self.assertFalse(self.reader.apply_tag_filters(text, tag_filter))
+        self.assertFalse(
+            self.reader.apply_tag_filters(text, tag_filter),
+            msg="Expected full keyword combination to be excluded"
+        )
 
 
 if __name__ == "__main__":

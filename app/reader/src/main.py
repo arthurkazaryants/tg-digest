@@ -11,6 +11,7 @@ import re
 import signal
 import time
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 import asyncpg
 import yaml
@@ -80,7 +81,7 @@ def load_config(path: str = None) -> dict:
         raise ValueError(f"Invalid YAML in config: {e}")
 
 
-def load_reader_config(path: str = None) -> tuple[dict, list[dict], dict]:
+def load_reader_config(path: str = None) -> Tuple[Dict, List[Dict], Dict]:
     """Загружает конфигурацию Reader и каналы.
     
     Возвращает:
@@ -159,7 +160,7 @@ def text_to_lower(text: str) -> str:
     return text.casefold() if text else ""
 
 
-def has_wildcard(keywords: list[str]) -> bool:
+def has_wildcard(keywords: List[str]) -> bool:
     """Проверяет, содержит ли список wildcard '*'."""
     return any(kw.strip() == "*" for kw in keywords if isinstance(kw, str))
 
@@ -188,7 +189,7 @@ def keyword_in_text(text_lower: str, keyword: str) -> bool:
     return kw in text_lower
 
 
-def matches_keywords(text: str, keywords: list[str], match_all: bool = False) -> bool:
+def matches_keywords(text: str, keywords: List[str], match_all: bool = False) -> bool:
     """Проверяет, соответствует ли текст ключевым словам.
     
     match_all=True: все ключевые слова должны быть в тексте
@@ -251,7 +252,7 @@ def apply_tag_filters(text: str, tag_filter: dict) -> bool:
     return True
 
 
-def should_save_post(text: str, channel_tags: list[str], tag_filters: dict) -> bool:
+def should_save_post(text: str, channel_tags: List[str], tag_filters: Dict) -> bool:
     """Определяет, нужно ли сохранять сообщение в БД на основе его тегов.
     
     Сообщение сохраняется если оно проходит фильтры для хотя бы одного тега канала.
