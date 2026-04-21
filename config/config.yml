@@ -83,6 +83,9 @@ channels:
   - username: it_vacancy_relocation
     limit: 40
     tags: [jobs]
+  - username: work_for_top
+    limit: 40
+    tags: [jobs]
 
 #  - username: devops_deflope
 #    limit: 50
