@@ -169,6 +169,7 @@ def keyword_in_text(text_lower: str, keyword: str) -> bool:
     """Проверяет ключевое слово с учетом границ слов/фраз.
 
     Это защищает от ложных срабатываний вроде 'cio' внутри 'location'.
+    Границы определяются буквами/цифрами, а не просто \w (которая включает _).
     """
     kw = keyword.casefold().strip()
     if not kw:
@@ -180,10 +181,12 @@ def keyword_in_text(text_lower: str, keyword: str) -> bool:
     escaped = re.escape(kw)
     escaped = escaped.replace(r"\ ", r"\s+")
 
-    # Для "словоподобных" ключей используем границы не-слов.
+    # Для "словоподобных" ключей используем границы по буквам/цифрам.
+    # Это избегает проблем с underscore в Markdown-форматировании.
     # Для прочих символов fallback на подстроку.
     if re.search(r"[0-9a-zа-яё]", kw, flags=re.IGNORECASE):
-        pattern = rf"(?<!\w){escaped}(?!\w)"
+        # Используем [0-9a-zа-яёА-ЯЁ] вместо \w чтобы не учитывать underscore
+        pattern = rf"(?<![0-9a-zа-яёА-ЯЁ]){escaped}(?![0-9a-zа-яёА-ЯЁ])"
         return re.search(pattern, text_lower, flags=re.IGNORECASE) is not None
 
     return kw in text_lower

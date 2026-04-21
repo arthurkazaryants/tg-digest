@@ -142,7 +142,7 @@ tag_filters:
       - "junior"
       - "intern"
       - "стажер"
-      - "ИЩУ РАБОТОДАТЕЛЯ"
+      - "ищу работодателя"
       - "sales"
       - "designer"
       - "#кандидат"
@@ -151,7 +151,7 @@ tag_filters:
       - "CISO"
       - "Director of Product"
       - "Marketing"
-      - "Team Lead IOS"
+      - "Team Lead"
       - "Tech Lead"
       - "Head of Marketing"
       - "Product Director"
@@ -161,6 +161,7 @@ tag_filters:
       - "Scrum Master"
       - "эксплуатацию зданий"
       - "эксплуатация зданий"
+      - "директор по строительству"
 
     # AND-исключения: если ВСЕ фразы из одного блока найдены в тексте — пост исключается
     exclude_keyword_combinations:
