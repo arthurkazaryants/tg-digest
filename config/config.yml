@@ -89,6 +89,15 @@ channels:
   - username: avito_career
     limit: 40
     tags: [jobs]
+  - username: rabotatutto1
+    limit: 40
+    tags: [jobs]
+  - username: vac_itt
+    limit: 40
+    tags: [jobs]
+  - username: careerstation_pm
+    limit: 40
+    tags: [jobs]
 
 #  - username: devops_deflope
 #    limit: 50
@@ -174,6 +183,7 @@ tag_filters:
       - ["технический директор", "производство", "эксплуатацию зданий"]
       - ["технический директор", "промышленное производство"]
       - ["на рынке","сильный", "кандидат", "экспертиза"]
+      - ["технический директор", "исполнительный директор", "производство", "снабжение"]
       
       
     
