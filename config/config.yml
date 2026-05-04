@@ -158,22 +158,23 @@ tag_filters:
       - "sales"
       - "designer"
       - "#кандидат"
-      - "HRD"
-      - "HRBP"
-      - "CISO"
-      - "Director of Product"
-      - "Marketing"
-      - "Team Lead"
-      - "Tech Lead"
-      - "Head of Marketing"
-      - "Product Director"
-      - "Engineer"
-      - "Developer"
-      - "System Analyst"
-      - "Scrum Master"
+      - "hrd"
+      - "hrbp"
+      - "ciso"
+      - "director of product"
+      - "marketing"
+      - "team lead"
+      - "tech lead"
+      - "head of marketing"
+      - "product director"
+      - "engineer"
+      - "developer"
+      - "system analyst"
+      - "scrum master"
       - "эксплуатацию зданий"
       - "эксплуатация зданий"
       - "директор по строительству"
+      - "рекомендуем кандидата"
 
     # AND-исключения: если ВСЕ фразы из одного блока найдены в тексте — пост исключается
     exclude_keyword_combinations:
@@ -184,6 +185,8 @@ tag_filters:
       - ["технический директор", "промышленное производство"]
       - ["на рынке","сильный", "кандидат", "экспертиза"]
       - ["технический директор", "исполнительный директор", "производство", "снабжение"]
+      - ["технический директор", "развитие предприятия"]
+      - ["технический директор", "технологичное производство"]
       
       
     
