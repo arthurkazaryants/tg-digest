@@ -98,6 +98,9 @@ channels:
   - username: careerstation_pm
     limit: 40
     tags: [jobs]
+  - username: "1096230280"
+    limit: 40
+    tags: [jobs]
 
 #  - username: devops_deflope
 #    limit: 50
