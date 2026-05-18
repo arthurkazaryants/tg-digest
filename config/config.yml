@@ -43,68 +43,135 @@ reader:
 channels:
   - username: g_jobbot
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: jobfortm
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: vacancyCRC
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: jtbl_vacancy
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: "2050754104"
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: workfortop
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: workfortop_pro
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: toplevel_job
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: top_proit
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: forchiefs
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: jobGeeks
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: sparklesjobs
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: c_level_top
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: it_vacancy_relocation
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: work_for_top
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: avito_career
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: rabotatutto1
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: vac_itt
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: careerstation_pm
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
   - username: "1096230280"
     limit: 40
-    tags: [jobs]
+    tags: [cto_jobs]
+  - username: progjob
+    limit: 40
+    tags: [cto_jobs]
+
+  - username: g_jobbot
+    limit: 40
+    tags: [sa_jobs]
+  - username: jobfortm
+    limit: 40
+    tags: [sa_jobs]
+  - username: vacancyCRC
+    limit: 40
+    tags: [sa_jobs]
+  - username: jtbl_vacancy
+    limit: 40
+    tags: [sa_jobs]
+  - username: "2050754104"
+    limit: 40
+    tags: [sa_jobs]
+  - username: workfortop
+    limit: 40
+    tags: [sa_jobs]
+  - username: workfortop_pro
+    limit: 40
+    tags: [sa_jobs]
+  - username: toplevel_job
+    limit: 40
+    tags: [sa_jobs]
+  - username: top_proit
+    limit: 40
+    tags: [sa_jobs]
+  - username: forchiefs
+    limit: 40
+    tags: [sa_jobs]
+  - username: jobGeeks
+    limit: 40
+    tags: [sa_jobs]
+  - username: sparklesjobs
+    limit: 40
+    tags: [sa_jobs]
+  - username: c_level_top
+    limit: 40
+    tags: [sa_jobs]
+  - username: it_vacancy_relocation
+    limit: 40
+    tags: [sa_jobs]
+  - username: work_for_top
+    limit: 40
+    tags: [sa_jobs]
+  - username: avito_career
+    limit: 40
+    tags: [sa_jobs]
+  - username: rabotatutto1
+    limit: 40
+    tags: [sa_jobs]
+  - username: vac_itt
+    limit: 40
+    tags: [sa_jobs]
+  - username: careerstation_pm
+    limit: 40
+    tags: [sa_jobs]
+  - username: "1096230280"
+    limit: 40
+    tags: [sa_jobs]
+  - username: progjob
+    limit: 40
+    tags: [sa_jobs]
 
 #  - username: devops_deflope
 #    limit: 50
-#    tags: [jobs, news]
+#    tags: [cto_jobs, news]
 #  - username: habr_com
 #    limit: 50
 #    tags: [news, learning]
@@ -121,7 +188,7 @@ channels:
 
 tag_filters:
   
-  jobs:
+  cto_jobs:
     include_keywords:
       - "cto"
       - "chief technology officer"
@@ -191,8 +258,41 @@ tag_filters:
       - ["технический директор", "исполнительный директор", "производство", "снабжение"]
       - ["технический директор", "развитие предприятия"]
       - ["технический директор", "технологичное производство"]
-      
-      
+
+  sa_jobs:
+    include_keywords:
+      - "system analyst"
+      - "системный аналитик"
+      - "business analyst"
+      - "бизнес аналитик"
+      - "it analyst"
+      - "аналитик it"
+      - "it бизнес аналитик"
+      - "it бизнес-аналитик"
+    
+    exclude_keywords:
+      - "junior"
+      - "intern"
+      - "стажер"
+      - "ищу работодателя"
+      - "sales"
+      - "designer"
+      - "#кандидат"
+      - "hrd"
+      - "hrbp"
+      - "ciso"
+      - "director of product"
+      - "marketing"
+      - "team lead"
+      - "tech lead"
+      - "head of marketing"
+      - "product director"
+      - "engineer"
+      - "developer"
+      - "scrum master"
+
+    exclude_keyword_combinations:
+      - ["системный аналитик", "производство"]
     
   # news:
   #   include_keywords: ["*"]
@@ -294,11 +394,17 @@ publisher:
   
   # Публикация по тегам
   sources:
-    jobs:
+    cto_jobs:
       enabled: true
       target_channel: -1003328023126   # Куда публиковать
       batch_limit: 10                         # Макс постов за раз
-      # format: "compact"  # На будущее: compact/full/summary
+      
+    sa_jobs:
+      enabled: true
+      target_channel: -1003756533698   # Куда публиковать
+      batch_limit: 10                         # Макс постов за раз
+      
+      
     # news:
     #   enabled: false
     #   target_channel: "@my_digest_news"
