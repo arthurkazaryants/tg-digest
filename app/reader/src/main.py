@@ -307,16 +307,27 @@ def should_save_post(text: str, channel_tag: str, tag_filters: Dict) -> bool:
     
     # Проверяем фильтр для единственного тега канала
     if channel_tag in tag_filters:
+        #     try:
+        #         if apply_tag_filters(text, tag_filters[channel_tag]):
+        #             logger.debug("Post matches tag filter: %s", channel_tag)
+        #             return True
+        #     except ValueError as e:
+        #         logger.warning("Error applying filter for tag %s: %s", channel_tag, e)
+        #         return False
+
         try:
             if apply_tag_filters(text, tag_filters[channel_tag]):
                 logger.debug("Post matches tag filter: %s", channel_tag)
                 return True
+            else:
+                logger.debug("Post did NOT match tag filter: %s", channel_tag)
+                return False
         except ValueError as e:
             logger.warning("Error applying filter for tag %s: %s", channel_tag, e)
             return False
-    
-    # Если тега нет в фильтрах
-    logger.warning("Tag '%s' not found in tag_filters", channel_tag)
+
+    # Если тега нет — предупреждение
+    logger.warning("Tag '%s' not found in tag_filters. Available tags: %s", channel_tag, list(tag_filters.keys()))
     return False
 
 
