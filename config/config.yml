@@ -36,148 +36,109 @@ reader:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Каналы для мониторинга
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Структура: channels[tag] = [список каналов для этого тега]
+# Каждый канал привязан ровно к одному тегу
 # username  — имя Telegram-канала (без @)
 # limit     — макс. последних постов за один опрос
-# tags      — категории для связи с tag_filters
 
 channels:
-  - username: g_jobbot
-    limit: 40
-    tags: [cto_jobs]
-  - username: jobfortm
-    limit: 40
-    tags: [cto_jobs]
-  - username: vacancyCRC
-    limit: 40
-    tags: [cto_jobs]
-  - username: jtbl_vacancy
-    limit: 40
-    tags: [cto_jobs]
-  - username: "2050754104"
-    limit: 40
-    tags: [cto_jobs]
-  - username: workfortop
-    limit: 40
-    tags: [cto_jobs]
-  - username: workfortop_pro
-    limit: 40
-    tags: [cto_jobs]
-  - username: toplevel_job
-    limit: 40
-    tags: [cto_jobs]
-  - username: top_proit
-    limit: 40
-    tags: [cto_jobs]
-  - username: forchiefs
-    limit: 40
-    tags: [cto_jobs]
-  - username: jobGeeks
-    limit: 40
-    tags: [cto_jobs]
-  - username: sparklesjobs
-    limit: 40
-    tags: [cto_jobs]
-  - username: c_level_top
-    limit: 40
-    tags: [cto_jobs]
-  - username: it_vacancy_relocation
-    limit: 40
-    tags: [cto_jobs]
-  - username: work_for_top
-    limit: 40
-    tags: [cto_jobs]
-  - username: avito_career
-    limit: 40
-    tags: [cto_jobs]
-  - username: rabotatutto1
-    limit: 40
-    tags: [cto_jobs]
-  - username: vac_itt
-    limit: 40
-    tags: [cto_jobs]
-  - username: careerstation_pm
-    limit: 40
-    tags: [cto_jobs]
-  - username: "1096230280"
-    limit: 40
-    tags: [cto_jobs]
-  - username: progjob
-    limit: 40
-    tags: [cto_jobs]
+  cto_jobs:
+    - username: g_jobbot
+      limit: 40
+    - username: jobfortm
+      limit: 40
+    - username: vacancyCRC
+      limit: 40
+    - username: jtbl_vacancy
+      limit: 40
+    - username: "2050754104"
+      limit: 40
+    - username: workfortop
+      limit: 40
+    - username: workfortop_pro
+      limit: 40
+    - username: toplevel_job
+      limit: 40
+    - username: top_proit
+      limit: 40
+    - username: forchiefs
+      limit: 40
+    - username: jobGeeks
+      limit: 40
+    - username: sparklesjobs
+      limit: 40
+    - username: c_level_top
+      limit: 40
+    - username: it_vacancy_relocation
+      limit: 40
+    - username: work_for_top
+      limit: 40
+    - username: avito_career
+      limit: 40
+    - username: rabotatutto1
+      limit: 40
+    - username: vac_itt
+      limit: 40
+    - username: careerstation_pm
+      limit: 40
+    - username: "1096230280"
+      limit: 40
+    - username: progjob
+      limit: 40
 
-  - username: g_jobbot
-    limit: 40
-    tags: [sa_jobs]
-  - username: jobfortm
-    limit: 40
-    tags: [sa_jobs]
-  - username: vacancyCRC
-    limit: 40
-    tags: [sa_jobs]
-  - username: jtbl_vacancy
-    limit: 40
-    tags: [sa_jobs]
-  - username: "2050754104"
-    limit: 40
-    tags: [sa_jobs]
-  - username: workfortop
-    limit: 40
-    tags: [sa_jobs]
-  - username: workfortop_pro
-    limit: 40
-    tags: [sa_jobs]
-  - username: toplevel_job
-    limit: 40
-    tags: [sa_jobs]
-  - username: top_proit
-    limit: 40
-    tags: [sa_jobs]
-  - username: forchiefs
-    limit: 40
-    tags: [sa_jobs]
-  - username: jobGeeks
-    limit: 40
-    tags: [sa_jobs]
-  - username: sparklesjobs
-    limit: 40
-    tags: [sa_jobs]
-  - username: c_level_top
-    limit: 40
-    tags: [sa_jobs]
-  - username: it_vacancy_relocation
-    limit: 40
-    tags: [sa_jobs]
-  - username: work_for_top
-    limit: 40
-    tags: [sa_jobs]
-  - username: avito_career
-    limit: 40
-    tags: [sa_jobs]
-  - username: rabotatutto1
-    limit: 40
-    tags: [sa_jobs]
-  - username: vac_itt
-    limit: 40
-    tags: [sa_jobs]
-  - username: careerstation_pm
-    limit: 40
-    tags: [sa_jobs]
-  - username: "1096230280"
-    limit: 40
-    tags: [sa_jobs]
-  - username: progjob
-    limit: 40
-    tags: [sa_jobs]
+  sa_jobs:
+    - username: g_jobbot
+      limit: 40
+    - username: jobfortm
+      limit: 40
+    - username: vacancyCRC
+      limit: 40
+    - username: jtbl_vacancy
+      limit: 40
+    - username: "2050754104"
+      limit: 40
+    - username: workfortop
+      limit: 40
+    - username: workfortop_pro
+      limit: 40
+    - username: toplevel_job
+      limit: 40
+    - username: top_proit
+      limit: 40
+    - username: forchiefs
+      limit: 40
+    - username: jobGeeks
+      limit: 40
+    - username: sparklesjobs
+      limit: 40
+    - username: c_level_top
+      limit: 40
+    - username: it_vacancy_relocation
+      limit: 40
+    - username: work_for_top
+      limit: 40
+    - username: avito_career
+      limit: 40
+    - username: rabotatutto1
+      limit: 40
+    - username: vac_itt
+      limit: 40
+    - username: careerstation_pm
+      limit: 40
+    - username: "1096230280"
+      limit: 40
+    - username: progjob
+      limit: 40
 
-#  - username: devops_deflope
-#    limit: 50
-#    tags: [cto_jobs, news]
-#  - username: habr_com
-#    limit: 50
-#    tags: [news, learning]
-#  - username: pythonl
-#    limit: 40
-#    tags: [learning]
+#  news:
+#    - username: devops_deflope
+#      limit: 50
+#    - username: habr_com
+#      limit: 50
+#
+#  learning:
+#    - username: pythonl
+#      limit: 40
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

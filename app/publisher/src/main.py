@@ -230,12 +230,38 @@ async def fetch_unpublished_posts(pool: asyncpg.Pool, limit: int) -> list[dict]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, channel, message_id, text, posted_at, views
+            SELECT id, channel, message_id, text, posted_at, views, tag
             FROM raw_posts
             WHERE published = false
             ORDER BY posted_at DESC
             LIMIT $1
             """,
+            limit,
+        )
+    return [dict(row) for row in rows]
+
+
+async def fetch_unpublished_posts_by_tag(pool: asyncpg.Pool, tag: str, limit: int) -> list[dict]:
+    """Получает неопубликованные посты конкретного тега из БД.
+    
+    Args:
+        pool: пул подключений
+        tag: тег (например 'cto_jobs' или 'sa_jobs')
+        limit: макс количество постов
+    
+    Returns:
+        Список постов с заданным тегом
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, channel, message_id, text, posted_at, views, tag
+            FROM raw_posts
+            WHERE published = false AND tag = $1
+            ORDER BY posted_at DESC
+            LIMIT $2
+            """,
+            tag,
             limit,
         )
     return [dict(row) for row in rows]
@@ -287,11 +313,12 @@ def parse_cron(cron_str: str) -> dict:
 async def publish_batch(bot: Bot, pool: asyncpg.Pool, config: dict):
     """Основная логика публикации: читаем → форматируем → отправляем → отмечаем.
     
-    Отправляет все неопубликованные посты для первого enabled источника через Bot API.
+    Публикует неопубликованные посты для каждого enabled источника в его целевой канал.
+    Посты фильтруются по тегу — каждый тег публикуется только в соответствующий канал.
     """
     start_time = time.time()
     
-    # Получаем первый enabled источник
+    # Получаем все enabled источники
     sources = config.get('sources', {})
     enabled_sources = {k: v for k, v in sources.items() if v.get('enabled', False)}
     
@@ -299,60 +326,82 @@ async def publish_batch(bot: Bot, pool: asyncpg.Pool, config: dict):
         logger.warning("No enabled sources in config")
         return
     
-    # Берём первый enabled источник (можно расширить на multiple источниках в будущем)
-    source_tag = next(iter(enabled_sources.keys()))
-    source_config = enabled_sources[source_tag]
-    batch_limit = source_config.get('batch_limit', DEFAULT_BATCH_LIMIT)
-    target_channel = source_config.get('target_channel')
+    total_sent = 0
+    total_failed = 0
     
-    # Получаем список неопубликованных постов
-    posts = await fetch_unpublished_posts(pool, batch_limit)
-    
-    if not posts:
-        logger.info("✓ No unpublished posts to send")
-        return
-    
-    logger.info(f"Publishing {len(posts)} posts to {target_channel}...")
-    
-    sent_count = 0
-    failed_count = 0
-    
-    for post in posts:
-        try:
-            # Форматируем и отправляем через Bot API
-            message = format_post(post)
-            await bot.send_message(chat_id=target_channel, text=message)
-            
-            # Отмечаем как опубликованное
-            await mark_as_published(pool, post["id"])
-            sent_count += 1
-            
-            logger.debug(f"✓ Post {post['id']} from @{post['channel']} published")
-            
-        except TelegramError as e:
-            failed_count += 1
-            logger.error(f"Telegram error publishing post {post['id']}: {e}")
-        except Exception as e:
-            failed_count += 1
-            logger.error(f"Failed to publish post {post['id']}: {e}")
+    # Для каждого enabled источника публикуем посты с его тегом
+    for source_tag, source_config in enabled_sources.items():
+        batch_limit = source_config.get('batch_limit', DEFAULT_BATCH_LIMIT)
+        target_channel = source_config.get('target_channel')
+        
+        # Получаем неопубликованные посты ТОЛЬКО с этим тегом
+        posts = await fetch_unpublished_posts_by_tag(pool, source_tag, batch_limit)
+        
+        if not posts:
+            logger.debug(f"No unpublished posts for tag '{source_tag}'")
+            continue
+        
+        logger.info(f"Publishing {len(posts)} posts with tag '{source_tag}' to {target_channel}...")
+        
+        sent_count = 0
+        failed_count = 0
+        
+        for post in posts:
+            try:
+                # Форматируем и отправляем через Bot API
+                message = format_post(post)
+                await bot.send_message(chat_id=target_channel, text=message)
+                
+                # Отмечаем как опубликованное
+                await mark_as_published(pool, post["id"])
+                sent_count += 1
+                
+                logger.debug(f"✓ Post {post['id']} (tag={post['tag']}) from @{post['channel']} published")
+                
+            except TelegramError as e:
+                failed_count += 1
+                logger.error(f"Telegram error publishing post {post['id']}: {e}")
+            except Exception as e:
+                failed_count += 1
+                logger.error(f"Failed to publish post {post['id']}: {e}")
+        
+        logger.info(f"✓ Source '{source_tag}': {sent_count} sent, {failed_count} failed")
+        total_sent += sent_count
+        total_failed += failed_count
     
     elapsed = time.time() - start_time
-    logger.info(f"✓ Publishing completed: {sent_count} sent, {failed_count} failed in {elapsed:.2f}s")
+    logger.info(f"✓ Publishing cycle completed: {total_sent} sent, {total_failed} failed in {elapsed:.2f}s")
 
 
 async def check_queue_and_publish_if_overflow(bot: Bot, pool: asyncpg.Pool, config: dict):
     """Проверяет размер очереди. Если > queue_threshold, публикует сразу.
     
-    Это предотвращает накопление постов и спам одного большого выброса.
+    Проверка проводится по каждому тегу отдельно:
+    - Если посты конкретного тега превышают порог, публикуют его посты
+    - Это предотвращает накопление постов и спам одного большого выброса
     """
     queue_threshold = config.get('queue_threshold', DEFAULT_QUEUE_THRESHOLD)
-    count = await get_unpublished_count(pool)
+    sources = config.get('sources', {})
+    enabled_sources = {k: v for k, v in sources.items() if v.get('enabled', False)}
     
-    if count >= queue_threshold:
-        logger.warning(f"Queue overflow detected: {count} unpublished posts (threshold={queue_threshold}). Publishing early!")
-        await publish_batch(bot, pool, config)
-    else:
-        logger.debug(f"Queue status: {count}/{queue_threshold} posts")
+    if not enabled_sources:
+        return
+    
+    # Проверяем очередь для каждого enabled source
+    for source_tag in enabled_sources.keys():
+        async with pool.acquire() as conn:
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM raw_posts WHERE published = false AND tag = $1",
+                source_tag
+            )
+        count = count or 0
+        
+        if count >= queue_threshold:
+            logger.warning(f"Queue overflow detected for tag '{source_tag}': {count} unpublished posts (threshold={queue_threshold}). Publishing early!")
+            await publish_batch(bot, pool, config)
+            break  # После публикации проверим очередь заново в следующем цикле
+        else:
+            logger.debug(f"Queue status for tag '{source_tag}': {count}/{queue_threshold} posts")
 
 
 async def main():

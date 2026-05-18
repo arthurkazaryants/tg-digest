@@ -84,8 +84,20 @@ def load_config(path: str = None) -> dict:
 def load_reader_config(path: str = None) -> Tuple[Dict, List[Dict], Dict]:
     """Загружает конфигурацию Reader и каналы.
     
+    Новая структура channels:
+        channels:
+          cto_jobs:
+            - username: g_jobbot
+              limit: 40
+            - username: jobfortm
+              limit: 40
+          sa_jobs:
+            - username: g_jobbot
+              limit: 40
+    
     Возвращает:
-        (reader_config, channels, tag_filters)
+        (reader_config, channels_flat, tag_filters)
+        где channels_flat — плоский список с добавленным полем 'tag' для каждого канала
     """
     config = load_config(path)
     
@@ -94,16 +106,29 @@ def load_reader_config(path: str = None) -> Tuple[Dict, List[Dict], Dict]:
     if not reader_config:
         raise ValueError("reader section not found in config")
     
-    channels = config.get("channels", [])
-    if not channels:
+    # Flatten nested channels structure: channels[tag][list] → flat list with tag field
+    channels_by_tag = config.get("channels", {})
+    if not channels_by_tag:
         raise ValueError("No channels found in config")
+    
+    channels_flat = []
+    for tag, channels_list in channels_by_tag.items():
+        if not isinstance(channels_list, list):
+            raise ValueError(f"channels.{tag} must be a list, got {type(channels_list)}")
+        
+        for ch in channels_list:
+            # Add the tag to each channel
+            ch_with_tag = dict(ch)  # Copy to avoid modifying original
+            ch_with_tag["tag"] = tag
+            channels_flat.append(ch_with_tag)
     
     tag_filters = config.get("tag_filters", {})
     if not tag_filters:
         raise ValueError("tag_filters not found in config")
     
-    logger.debug("Loaded %d channels and tag_filters for tags: %s", len(channels), list(tag_filters.keys()))
-    return reader_config, channels, tag_filters
+    logger.debug("Loaded %d channels with tags %s and tag_filters for tags: %s", 
+                 len(channels_flat), set(ch["tag"] for ch in channels_flat), list(tag_filters.keys()))
+    return reader_config, channels_flat, tag_filters
 
 
 def validate_config(config: dict) -> None:
@@ -120,16 +145,25 @@ def validate_config(config: dict) -> None:
     if "poll_interval_sec" not in reader:
         raise ValueError("Missing required field: reader.poll_interval_sec (e.g., 600 for 10 minutes)")
     
-    # Channels section
+    # Channels section (now dict instead of list)
     channels = config.get("channels")
-    if not channels or not isinstance(channels, list):
-        raise ValueError("Missing required section: channels (must be a non-empty list)")
+    if not channels or not isinstance(channels, dict):
+        raise ValueError("Missing required section: channels (must be a non-empty dict with tag keys)")
     
-    for i, ch in enumerate(channels):
-        if not ch.get("username"):
-            raise ValueError(f"Channel #{i}: missing required field 'username'")
-        if not ch.get("tags"):
-            raise ValueError(f"Channel '{ch.get('username')}': missing required field 'tags'")
+    for tag_name, channels_list in channels.items():
+        if not isinstance(channels_list, list):
+            raise ValueError(f"channels.{tag_name} must be a list of channel objects")
+        
+        if not channels_list:
+            raise ValueError(f"channels.{tag_name} is empty")
+        
+        for i, ch in enumerate(channels_list):
+            if not isinstance(ch, dict):
+                raise ValueError(f"channels.{tag_name}[{i}]: must be a dictionary")
+            if not ch.get("username"):
+                raise ValueError(f"channels.{tag_name}[{i}]: missing required field 'username'")
+            if "limit" not in ch:
+                raise ValueError(f"channels.{tag_name}[{i}] (username={ch.get('username')}): missing required field 'limit'")
     
     # Tag filters section
     tag_filters = config.get("tag_filters")
@@ -255,34 +289,34 @@ def apply_tag_filters(text: str, tag_filter: dict) -> bool:
     return True
 
 
-def should_save_post(text: str, channel_tags: List[str], tag_filters: Dict) -> bool:
-    """Определяет, нужно ли сохранять сообщение в БД на основе его тегов.
+def should_save_post(text: str, channel_tag: str, tag_filters: Dict) -> bool:
+    """Определяет, нужно ли сохранять сообщение в БД на основе тега канала.
     
-    Сообщение сохраняется если оно проходит фильтры для хотя бы одного тега канала.
+    Теперь каждый канал имеет ровно один тег, поэтому логика упрощена.
     
     Args:
         text: текст сообщения
-        channel_tags: теги канала (например ["jobs"], ["jobs", "news"])
-        tag_filters: загруженные фильтры {"jobs": {...}, "news": {...}, ...}
+        channel_tag: один тег канала (например "cto_jobs" или "sa_jobs")
+        tag_filters: загруженные фильтры {"cto_jobs": {...}, "sa_jobs": {...}, ...}
     
     Returns:
-        True если сообщение проходит фильтры хотя бы одного из тегов
+        True если сообщение проходит фильтры тега
     """
-    if not text or not channel_tags:
+    if not text or not channel_tag:
         return False
     
-    # Проверяем каждый тег канала
-    for tag in channel_tags:
-        if tag in tag_filters:
-            try:
-                if apply_tag_filters(text, tag_filters[tag]):
-                    logger.debug("Post matches tag filter: %s", tag)
-                    return True  # Если фильтр тега пройден, сохраняем
-            except ValueError as e:
-                logger.warning("Error applying filter for tag %s: %s", tag, e)
-                continue
+    # Проверяем фильтр для единственного тега канала
+    if channel_tag in tag_filters:
+        try:
+            if apply_tag_filters(text, tag_filters[channel_tag]):
+                logger.debug("Post matches tag filter: %s", channel_tag)
+                return True
+        except ValueError as e:
+            logger.warning("Error applying filter for tag %s: %s", channel_tag, e)
+            return False
     
-    # Если ни один тег не пройден
+    # Если тега нет в фильтрах
+    logger.warning("Tag '%s' not found in tag_filters", channel_tag)
     return False
 
 
@@ -315,6 +349,7 @@ async def init_db(pool: asyncpg.Pool):
                 message_id   BIGINT NOT NULL,
                 posted_at    TIMESTAMPTZ,
                 text         TEXT,
+                tag          TEXT,
                 views        INT DEFAULT 0,
                 published    BOOLEAN DEFAULT false,
                 fetched_at   TIMESTAMPTZ DEFAULT now(),
@@ -322,6 +357,12 @@ async def init_db(pool: asyncpg.Pool):
             );
         """)
         
+        # МИГРАЦИЯ: добавить колонку tag если её нет
+        await conn.execute("""
+            ALTER TABLE IF EXISTS raw_posts 
+            ADD COLUMN IF NOT EXISTS tag TEXT;
+        """)
+
         # Создание индексов для быстрого поиска
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_channel_posted_at 
@@ -385,7 +426,7 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
             return
     
     limit = channel.get("limit", 50)
-    tags = channel.get("tags", [])
+    channel_tag = channel.get("tag")  # Now guaranteed to be a single string
     
     # Получаем последний message_id для этого канала
     async with pool.acquire() as conn:
@@ -395,8 +436,8 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
         )
     last_message_id = last_message_id or 0
     
-    logger.info("Fetching messages from %s (last_id=%d, limit=%d, tags=%s)", 
-                channel_name, last_message_id, limit, tags)
+    logger.info("Fetching messages from %s (last_id=%d, limit=%d, tag=%s)", 
+                channel_name, last_message_id, limit, channel_tag)
 
     messages_to_insert = []
     filtered_count = 0
@@ -406,8 +447,8 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
         if not message.text:
             continue
         
-        # Применяем фильтры на основе тегов канала
-        if not should_save_post(message.text, tags, tag_filters):
+        # Применяем фильтр на основе единственного тега канала
+        if not should_save_post(message.text, channel_tag, tag_filters):
             filtered_count += 1
             logger.debug("Filtered message from %s (ID: %d)", channel_name, message.id)
             continue
@@ -418,6 +459,7 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
             message.date,
             message.text,
             message.views or 0,
+            channel_tag,  # Now directly use the tag string
         ))
 
     # Батч-вставка для эффективности
@@ -425,8 +467,8 @@ async def fetch_channel(client: TelegramClient, pool: asyncpg.Pool, channel: dic
         async with pool.acquire() as conn:
             await conn.executemany(
                 """
-                INSERT INTO raw_posts (channel, message_id, posted_at, text, views)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO raw_posts (channel, message_id, posted_at, text, views, tag)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (channel, message_id) DO NOTHING
                 """,
                 messages_to_insert,
