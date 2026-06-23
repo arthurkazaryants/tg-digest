@@ -25,4 +25,4 @@ jobs:
               -o UserKnownHostsFile=/dev/null \
               -p "${DEPLOY_SSH_PORT:-22}" \
               "${DEPLOY_USER}@${DEPLOY_HOST}" \
-              'bash /opt/tg-digest/scripts/deploy.sh'
+              'sudo -u tg-digest bash -lc "bash /opt/tg-digest/scripts/deploy.sh"'
