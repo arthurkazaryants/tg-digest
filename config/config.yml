@@ -87,6 +87,8 @@ channels:
       limit: 40
     - username: cyithr
       limit: 80
+    - username: careerfedoroff
+      limit: 40
 
   sa_jobs:
     - username: g_jobbot
