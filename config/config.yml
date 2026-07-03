@@ -91,6 +91,8 @@ channels:
       limit: 40
     - username: jobsearchIT
       limit: 40
+    - username: vacanciesbest
+      limit: 40
 
   sa_jobs:
     - username: g_jobbot
